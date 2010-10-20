@@ -1,0 +1,35 @@
+#! /bin/sh -e
+##
+## All lines beginning with `## DP:' are a description of the patch.
+## DP: Increases VG_N_THREADS 
+
+[ -f debian/patches/00patch-opts ] && . debian/patches/00patch-opts
+patch_opts="${patch_opts:--f --no-backup-if-mismatch}"
+
+if [ $# -ne 1 ]; then
+    echo >&2 "`basename $0`: script expects -patch|-unpatch as argument"
+    exit 1
+fi
+case "$1" in
+       -patch) patch $patch_opts -p1 < $0;;
+       -unpatch) patch $patch_opts -p1 -R < $0;;
+        *)
+                echo >&2 "`basename $0`: script expects -patch|-unpatch as argument"
+                exit 1;;
+esac
+
+exit 0
+@DPATCH@
+
+diff -urN valgrind-3.6.0~svn11254.orig//coregrind/m_aspacemgr/aspacemgr-linux.c valgrind-3.6.0~svn11254/coregrind/m_aspacemgr/aspacemgr-linux.c
+--- valgrind-3.6.0~svn11254.orig//coregrind/m_aspacemgr/aspacemgr-linux.c	2010-08-09 09:11:59.000000000 -0500
++++ valgrind-3.6.0~svn11254/coregrind/m_aspacemgr/aspacemgr-linux.c	2010-08-09 09:31:45.000000000 -0500
+@@ -265,7 +265,7 @@
+ /* ------ start of STATE for the address-space manager ------ */
+ 
+ /* Max number of segments we can track. */
+-#define VG_N_SEGMENTS 5000
++#define VG_N_SEGMENTS 25000
+ 
+ /* Max number of segment file names we can track. */
+ #define VG_N_SEGNAMES 1000

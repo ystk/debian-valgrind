@@ -1,0 +1,4 @@
+usr/bin
+usr/lib
+usr/share/doc/valgrind/html
+etc/bash_completion.d
