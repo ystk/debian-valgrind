@@ -7,7 +7,7 @@
    This file is part of Valgrind, a dynamic binary instrumentation
    framework.
 
-   Copyright (C) 2004-2010 OpenWorks LLP
+   Copyright (C) 2004-2011 OpenWorks LLP
       info@open-works.net
 
    This program is free software; you can redistribute it and/or
@@ -62,12 +62,16 @@ DisResult disInstr_PPC ( IRSB*        irbb,
 
 /* Used by the optimiser to specialise calls to helpers. */
 extern
-IRExpr* guest_ppc32_spechelper ( HChar* function_name,
-                                 IRExpr** args );
+IRExpr* guest_ppc32_spechelper ( HChar*   function_name,
+                                 IRExpr** args,
+                                 IRStmt** precedingStmts,
+                                 Int      n_precedingStmts );
 
 extern
-IRExpr* guest_ppc64_spechelper ( HChar* function_name,
-                                 IRExpr** args );
+IRExpr* guest_ppc64_spechelper ( HChar*   function_name,
+                                 IRExpr** args,
+                                 IRStmt** precedingStmts,
+                                 Int      n_precedingStmts );
 
 /* Describes to the optimser which part of the guest state require
    precise memory exceptions.  This is logically part of the guest
@@ -122,6 +126,10 @@ enum {
    /* 11 */ PPCG_FLAG_OP_SRAWI,   // srawi
    /* 12 */ PPCG_FLAG_OP_SRAD,    // srad
    /* 13 */ PPCG_FLAG_OP_SRADI,   // sradi
+   /* 14 */ PPCG_FLAG_OP_DIVDE,   // divdeo
+   /* 15 */ PPCG_FLAG_OP_DIVWEU,  // divweuo
+   /* 16 */ PPCG_FLAG_OP_DIVWE,   // divweo
+   /* 17 */ PPCG_FLAG_OP_DIVDEU,  // divdeuo
    PPCG_FLAG_OP_NUMBER
 };
 

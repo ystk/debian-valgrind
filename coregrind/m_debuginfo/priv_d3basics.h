@@ -8,7 +8,7 @@
    This file is part of Valgrind, a dynamic binary instrumentation
    framework.
 
-   Copyright (C) 2008-2010 OpenWorks LLP and others; see below
+   Copyright (C) 2008-2011 OpenWorks LLP and others; see below
       info@open-works.co.uk
 
    This program is free software; you can redistribute it and/or
@@ -372,6 +372,8 @@ typedef enum
     DW_ATE_signed_fixed = 0xd,
     DW_ATE_unsigned_fixed = 0xe,
     DW_ATE_decimal_float = 0xf,
+    /* DWARF 4.  */
+    DW_ATE_UTF = 0x10,
     /* HP extensions.  */
     DW_ATE_HP_float80            = 0x80, /* Floating-point (80 bit).  */
     DW_ATE_HP_complex_float80    = 0x81, /* Complex floating-point (80 bit).  */

@@ -6,7 +6,7 @@
    This file is part of Valgrind, a dynamic binary instrumentation
    framework.
 
-   Copyright (C) 2004-2010 OpenWorks LLP
+   Copyright (C) 2004-2011 OpenWorks LLP
       info@open-works.net
 
    This program is free software; you can redistribute it and/or
@@ -55,8 +55,10 @@ DisResult disInstr_ARM ( IRSB*        irbb,
 
 /* Used by the optimiser to specialise calls to helpers. */
 extern
-IRExpr* guest_arm_spechelper ( HChar* function_name,
-                               IRExpr** args );
+IRExpr* guest_arm_spechelper ( HChar*   function_name,
+                               IRExpr** args,
+                               IRStmt** precedingStmts,
+                               Int      n_precedingStmts );
 
 /* Describes to the optimser which part of the guest state require
    precise memory exceptions.  This is logically part of the guest
@@ -100,6 +102,12 @@ UInt armg_calculate_condition ( UInt cond_n_op /* ARMCondcode << 4 | cc_op */,
                                 UInt cc_dep1,
                                 UInt cc_dep2, UInt cc_dep3 );
 
+/* Calculate the QC flag from the thunk components, in the lowest bit
+   of the word (bit 0). */
+extern 
+UInt armg_calculate_flag_qc ( UInt resL1, UInt resL2,
+                              UInt resR1, UInt resR2 );
+
 
 /*---------------------------------------------------------*/
 /*--- Condition code stuff                              ---*/
@@ -110,14 +118,16 @@ UInt armg_calculate_condition ( UInt cond_n_op /* ARMCondcode << 4 | cc_op */,
 #define ARMG_CC_SHIFT_Z  30
 #define ARMG_CC_SHIFT_C  29
 #define ARMG_CC_SHIFT_V  28
+#define ARMG_CC_SHIFT_Q  27
 
 #define ARMG_CC_MASK_N    (1 << ARMG_CC_SHIFT_N)
 #define ARMG_CC_MASK_Z    (1 << ARMG_CC_SHIFT_Z)
 #define ARMG_CC_MASK_C    (1 << ARMG_CC_SHIFT_C)
 #define ARMG_CC_MASK_V    (1 << ARMG_CC_SHIFT_V)
+#define ARMG_CC_MASK_Q    (1 << ARMG_CC_SHIFT_Q)
 
 /* Flag thunk descriptors.  A four-word thunk is used to record
-   details of the most recent flag-setting operation, so the flags can
+   details of the most recent flag-setting operation, so NZCV can
    be computed later if needed.
 
    The four words are:
@@ -138,6 +148,10 @@ UInt armg_calculate_condition ( UInt cond_n_op /* ARMCondcode << 4 | cc_op */,
    that the definedness of the stored flags always depends on
    all 3 DEP values.
 
+   Fields carrying only 1 or 2 bits of useful information (old_C,
+   shifter_co, old_V, oldC:oldV) must have their top 31 or 30 bits
+   (respectively) zero.  The text "31x0:" or "30x0:" denotes this.
+
    A summary of the field usages is:
 
    OP                DEP1              DEP2              DEP3
@@ -146,11 +160,11 @@ UInt armg_calculate_condition ( UInt cond_n_op /* ARMCondcode << 4 | cc_op */,
    OP_COPY           current NZCV      unused            unused
    OP_ADD            argL              argR              unused
    OP_SUB            argL              argR              unused
-   OP_ADC            argL              argR              old_C
-   OP_SBB            argL              argR              old_C
-   OP_LOGIC          result            shifter_co        old_V
-   OP_MUL            result            unused            old_C:old_V
-   OP_MULL           resLO32           resHI32           old_C:old_V
+   OP_ADC            argL              argR              31x0:old_C
+   OP_SBB            argL              argR              31x0:old_C
+   OP_LOGIC          result            31x0:shifter_co   31x0:old_V
+   OP_MUL            result            unused            30x0:old_C:old_V
+   OP_MULL           resLO32           resHI32           30x0:old_C:old_V
 */
 
 enum {

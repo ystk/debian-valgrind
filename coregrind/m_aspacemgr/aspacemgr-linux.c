@@ -10,7 +10,7 @@
    This file is part of Valgrind, a dynamic binary instrumentation
    framework.
 
-   Copyright (C) 2000-2010 Julian Seward 
+   Copyright (C) 2000-2011 Julian Seward 
       jseward@acm.org
 
    This program is free software; you can redistribute it and/or
@@ -341,10 +341,17 @@ static void parse_procselfmaps (
 /* ----- Hacks to do with the "commpage" on arm-linux ----- */
 /* Not that I have anything against the commpage per se.  It's just
    that it's not listed in /proc/self/maps, which is a royal PITA --
-   we have to fake it up, in parse_procselfmaps. */
+   we have to fake it up, in parse_procselfmaps.
+
+   But note also bug 254556 comment #2: this is now fixed in newer
+   kernels -- it is listed as a "[vectors]" entry.  Presumably the
+   fake entry made here duplicates the [vectors] entry, and so, if at
+   some point in the future, we can stop supporting buggy kernels,
+   then this kludge can be removed entirely, since the procmap parser
+   below will read that entry in the normal way. */
 #if defined(VGP_arm_linux)
 #  define ARM_LINUX_FAKE_COMMPAGE_START 0xFFFF0000
-#  define ARM_LINUX_FAKE_COMMPAGE_END1  0xFFFFF000
+#  define ARM_LINUX_FAKE_COMMPAGE_END1  0xFFFF1000
 #endif
 
 
@@ -893,10 +900,10 @@ static void sync_check_mapping_callback ( Addr addr, SizeT len, UInt prot,
       These kernels report which mappings are really executable in
       the /proc/self/maps output rather than mirroring what was asked
       for when each mapping was created. In order to cope with this we
-      have a sloppyXcheck mode which we enable on x86 - in this mode we
-      allow the kernel to report execute permission when we weren't
+      have a sloppyXcheck mode which we enable on x86 and s390 - in this
+      mode we allow the kernel to report execute permission when we weren't
       expecting it but not vice versa. */
-#  if defined(VGA_x86)
+#  if defined(VGA_x86) || defined (VGA_s390x)
    sloppyXcheck = True;
 #  else
    sloppyXcheck = False;
@@ -1139,7 +1146,7 @@ static Int find_nsegment_idx_WRK ( Addr a )
 
 inline static Int find_nsegment_idx ( Addr a )
 {
-#  define N_CACHE 63
+#  define N_CACHE 131 /*prime*/
    static Addr cache_pageno[N_CACHE];
    static Int  cache_segidx[N_CACHE];
    static Bool cache_inited = False;
@@ -2481,11 +2488,11 @@ SysRes VG_(am_sbrk_anon_float_valgrind)( SizeT cszB )
 
 
 /* Map a file at an unconstrained address for V, and update the
-   segment array accordingly.  This is used by V for transiently
-   mapping in object files to read their debug info.  */
+   segment array accordingly. Use the provided flags */
 
-SysRes VG_(am_mmap_file_float_valgrind) ( SizeT length, UInt prot, 
-                                          Int fd, Off64T offset )
+static SysRes VG_(am_mmap_file_float_valgrind_flags) ( SizeT length, UInt prot,
+                                                       UInt flags,
+                                                       Int fd, Off64T offset )
 {
    SysRes     sres;
    NSegment   seg;
@@ -2513,7 +2520,7 @@ SysRes VG_(am_mmap_file_float_valgrind) ( SizeT length, UInt prot,
       any resulting failure immediately. */
    sres = VG_(am_do_mmap_NO_NOTIFY)( 
              advised, length, prot, 
-             VKI_MAP_FIXED|VKI_MAP_PRIVATE, 
+             flags,
              fd, offset 
           );
    if (sr_isError(sres))
@@ -2549,7 +2556,25 @@ SysRes VG_(am_mmap_file_float_valgrind) ( SizeT length, UInt prot,
    AM_SANITY_CHECK;
    return sres;
 }
+/* Map privately a file at an unconstrained address for V, and update the
+   segment array accordingly.  This is used by V for transiently
+   mapping in object files to read their debug info.  */
 
+SysRes VG_(am_mmap_file_float_valgrind) ( SizeT length, UInt prot, 
+                                          Int fd, Off64T offset )
+{
+   return VG_(am_mmap_file_float_valgrind_flags) (length, prot,
+                                                  VKI_MAP_FIXED|VKI_MAP_PRIVATE,
+                                                  fd, offset );
+}
+
+extern SysRes VG_(am_shared_mmap_file_float_valgrind)
+   ( SizeT length, UInt prot, Int fd, Off64T offset )
+{
+   return VG_(am_mmap_file_float_valgrind_flags) (length, prot,
+                                                  VKI_MAP_FIXED|VKI_MAP_SHARED,
+                                                  fd, offset );
+}
 
 /* --- --- munmap helper --- --- */
 
@@ -3413,10 +3438,11 @@ static void parse_procselfmaps (
       (*record_gap)(last, (Addr)-1 - last);
 }
 
-Bool        css_overflowed;
-ChangedSeg* css_local;
-Int         css_size_local;
-Int         css_used_local;
+// Urr.  So much for thread safety.
+static Bool        css_overflowed;
+static ChangedSeg* css_local;
+static Int         css_size_local;
+static Int         css_used_local;
 
 static void add_mapping_callback(Addr addr, SizeT len, UInt prot, 
                                  ULong dev, ULong ino, Off64T offset, 

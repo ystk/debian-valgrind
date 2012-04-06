@@ -1,4 +1,3 @@
-
 /*--------------------------------------------------------------------*/
 /*--- The core dispatch loop, for jumping to a code address.       ---*/
 /*---                                         dispatch-arm-linux.S ---*/
@@ -8,7 +7,7 @@
   This file is part of Valgrind, a dynamic binary instrumentation
   framework.
 
-  Copyright (C) 2008-2010 Evan Geller
+  Copyright (C) 2008-2011 Evan Geller
      gaze@bea.ms
 
   This program is free software; you can redistribute it and/or
@@ -30,6 +29,7 @@
 */
 
 #if defined(VGP_arm_linux)
+	.fpu vfp
 
 #include "pub_core_basics_asm.h"
 #include "pub_core_dispatch_asm.h"
@@ -63,7 +63,7 @@ VG_(run_innerloop):
         /* r0 (hence also [sp,#0]) holds guest_state */
         /* r1 holds do_profiling */
 	mov r8, r0
-	ldr r0, [r8, #OFFSET_arm_R15]
+	ldr r0, [r8, #OFFSET_arm_R15T]
         
        	/* fall into main loop (the right one) */
 	cmp r1, #0      /* do_profiling */
@@ -75,6 +75,9 @@ VG_(run_innerloop):
 /*--- NO-PROFILING (standard) dispatcher           ---*/
 /*----------------------------------------------------*/
 
+/* Pairing of insns below is my guesstimate of how dual dispatch would
+   work on an A8.  JRS, 2011-May-28 */
+ 
 .global	VG_(run_innerloop__dispatch_unprofiled)
 VG_(run_innerloop__dispatch_unprofiled):
 
@@ -82,36 +85,47 @@ VG_(run_innerloop__dispatch_unprofiled):
         modified guest state ptr */
 
         /* Has the guest state pointer been messed with?  If yes, exit. */
-	ldr  r1, [sp, #0]
-	cmp  r8, r1
+        movw r3, #:lower16:VG_(dispatch_ctr)
+        tst  r8, #1
+
+        movt r3, #:upper16:VG_(dispatch_ctr)
+
 	bne  gsp_changed
 
 	/* save the jump address in the guest state */
-        str  r0, [r8, #OFFSET_arm_R15]
+        str  r0, [r8, #OFFSET_arm_R15T]
 
         /* Are we out of timeslice?  If yes, defer to scheduler. */
-        ldr  r1, =VG_(dispatch_ctr)
-        ldr  r2, [r1]
+        ldr  r2, [r3]
+
         subs r2, r2, #1
-        str  r2, [r1]
+
+        str  r2, [r3]
+
         beq  counter_is_zero
 
         /* try a fast lookup in the translation cache */
-        // r0 = next guest, r1,r2,r3 scratch
-	ldr  r1, =VG_TT_FAST_MASK       // r1 = VG_TT_FAST_MASK
-	and  r2, r1, r0, LSR #2         // r2 = entry #
-	ldr  r1, =VG_(tt_fast)          // r1 = &tt_fast[0]
-	add  r1, r1, r2, LSL #3         // r1 = &tt_fast[entry#]
-	ldr  r3, [r1, #0]               /* .guest */
-	ldr  r1, [r1, #4]               /* .host  */
-	cmp  r0, r3
+        // r0 = next guest, r1,r2,r3,r4 scratch
+        movw r1, #VG_TT_FAST_MASK       // r1 = VG_TT_FAST_MASK
+        movw r4, #:lower16:VG_(tt_fast)
+
+	and  r2, r1, r0, LSR #1         // r2 = entry #
+        movt r4, #:upper16:VG_(tt_fast) // r4 = &VG_(tt_fast)
+
+	add  r1, r4, r2, LSL #3         // r1 = &tt_fast[entry#]
+
+        ldrd r4, r5, [r1, #0]           // r4 = .guest, r5 = .host
+
+	cmp  r4, r0
+
 	bne  fast_lookup_failed
-        // r1: live, next-host    r8: live, gsp
-        // r2: entry # (but not live)
-        // r0, r3: dead
+        // r5: next-host    r8: live, gsp
+        // r4: next-guest
+        // r2: entry #
+        // LIVE: r5, r8; all others dead
         
         /* Found a match.  Jump to .host. */
-	blx  r1
+	blx  r5
 	b    VG_(run_innerloop__dispatch_unprofiled)
 .ltorg
 	/*NOTREACHED*/
@@ -127,43 +141,55 @@ VG_(run_innerloop__dispatch_profiled):
         modified guest state ptr */
 
         /* Has the guest state pointer been messed with?  If yes, exit. */
-	ldr  r1, [sp, #0]
-	cmp  r8, r1
+        movw r3, #:lower16:VG_(dispatch_ctr)
+	tst  r8, #1
+
+        movt r3, #:upper16:VG_(dispatch_ctr)
+
 	bne  gsp_changed
 
 	/* save the jump address in the guest state */
-        str  r0, [r8, #OFFSET_arm_R15]
+        str  r0, [r8, #OFFSET_arm_R15T]
 
         /* Are we out of timeslice?  If yes, defer to scheduler. */
-        ldr  r1, =VG_(dispatch_ctr)
-        ldr  r2, [r1]
+        ldr  r2, [r3]
+
         subs r2, r2, #1
-        str  r2, [r1]
+
+        str  r2, [r3]
+
         beq  counter_is_zero
 
         /* try a fast lookup in the translation cache */
-        // r0 = next guest, r1,r2,r3 scratch
-	ldr  r1, =VG_TT_FAST_MASK       // r1 = VG_TT_FAST_MASK
-	and  r2, r1, r0, LSR #2         // r2 = entry #
-	ldr  r1, =VG_(tt_fast)          // r1 = &tt_fast[0]
-	add  r1, r1, r2, LSL #3         // r1 = &tt_fast[entry#]
-	ldr  r3, [r1, #0]               /* .guest */
-	ldr  r1, [r1, #4]               /* .host  */
-	cmp  r0, r3
+        // r0 = next guest, r1,r2,r3,r4 scratch
+        movw r1, #VG_TT_FAST_MASK       // r1 = VG_TT_FAST_MASK
+        movw r4, #:lower16:VG_(tt_fast)
+
+	and  r2, r1, r0, LSR #1         // r2 = entry #
+        movt r4, #:upper16:VG_(tt_fast) // r4 = &VG_(tt_fast)
+
+	add  r1, r4, r2, LSL #3         // r1 = &tt_fast[entry#]
+
+        ldrd r4, r5, [r1, #0]           // r4 = .guest, r5 = .host
+
+	cmp  r4, r0
+
 	bne  fast_lookup_failed
-        // r1: live, next-host    r8: live, gsp
-        // r2: entry # (but not live)
-        // r0, r3: dead
+        // r5: next-host    r8: live, gsp
+        // r4: next-guest
+        // r2: entry #
+        // LIVE: r5, r8; all others dead
         
         /* increment bb profile counter */
-        ldr  r0, =VG_(tt_fastN)         // r0 = &tt_fastN[0]
-        ldr  r0, [r0, r2, LSL #2]       // r0 = tt_fast[entry #]
-        ldr  r3, [r0]                   // *r0 ++
+        movw r0, #:lower16:VG_(tt_fastN)
+        movt r0, #:upper16:VG_(tt_fastN) // r0 = &tt_fastN[0]
+        ldr  r0, [r0, r2, LSL #2]        // r0 = tt_fast[entry #]
+        ldr  r3, [r0]                    // *r0 ++
         add  r3, r3, #1
         str  r3, [r0]
 
         /* Found a match.  Jump to .host. */
-	blx  r1
+	blx  r5
 	b    VG_(run_innerloop__dispatch_profiled)
 	/*NOTREACHED*/
 
@@ -172,22 +198,22 @@ VG_(run_innerloop__dispatch_profiled):
 /*----------------------------------------------------*/
 
 gsp_changed:
-        // r0 = next guest addr (R15), r8 = modified gsp
+        // r0 = next guest addr (R15T), r8 = modified gsp
         /* Someone messed with the gsp.  Have to
            defer to scheduler to resolve this.  dispatch ctr
            is not yet decremented, so no need to increment. */
-        /* R15 is NOT up to date here.  First, need to write
-           r0 back to R15, but without trashing r8 since
+        /* R15T is NOT up to date here.  First, need to write
+           r0 back to R15T, but without trashing r8 since
            that holds the value we want to return to the scheduler.
            Hence use r1 transiently for the guest state pointer. */
 	ldr r1, [sp, #0]
-	str r0, [r1, #OFFSET_arm_R15]
+	str r0, [r1, #OFFSET_arm_R15T]
 	mov r0, r8      // "return modified gsp"
 	b run_innerloop_exit
         /*NOTREACHED*/
 
 counter_is_zero:
-        /* R15 is up to date here */
+        /* R15T is up to date here */
         /* Back out increment of the dispatch ctr */
         ldr  r1, =VG_(dispatch_ctr)
         ldr  r2, [r1]
@@ -198,7 +224,7 @@ counter_is_zero:
         /*NOTREACHED*/
         
 fast_lookup_failed:
-        /* R15 is up to date here */
+        /* R15T is up to date here */
         /* Back out increment of the dispatch ctr */
         ldr  r1, =VG_(dispatch_ctr)
         ldr  r2, [r1]
@@ -215,8 +241,8 @@ run_innerloop_exit:
         /* We're leaving.  Check that nobody messed with
            FPSCR in ways we don't expect. */
         fmrx r4, fpscr
-        bic  r4, #0xF0000000 /* mask out NZCV */
-        bic  r4, #0x0000001F /* mask out IXC,UFC,OFC,DZC,IOC */
+        bic  r4, #0xF8000000 /* mask out NZCV and QC */
+        bic  r4, #0x0000009F /* mask out IDC,IXC,UFC,OFC,DZC,IOC */
         cmp  r4, #0
         bne  invariant_violation
         b    run_innerloop_exit_REALLY

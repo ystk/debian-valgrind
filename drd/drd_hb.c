@@ -1,8 +1,8 @@
-/* -*- mode: C; c-basic-offset: 3; -*- */
+/* -*- mode: C; c-basic-offset: 3; indent-tabs-mode: nil; -*- */
 /*
   This file is part of drd, a thread error detector.
 
-  Copyright (C) 2006-2010 Bart Van Assche <bart.vanassche@gmail.com>.
+  Copyright (C) 2006-2011 Bart Van Assche <bvanassche@acm.org>.
 
   This program is free software; you can redistribute it and/or
   modify it under the terms of the GNU General Public License as
@@ -94,7 +94,6 @@ void DRD_(hb_initialize)(struct hb_info* const p, const Addr hb)
    p->delete_thread = 0;
    p->oset          = VG_(OSetGen_Create)(0, 0, VG_(malloc), "drd.hb",
                                           VG_(free));
-   p->done          = False;
 }
 
 /**
@@ -166,29 +165,11 @@ void DRD_(hb_happens_before)(const DrdThreadId tid, Addr const hb)
 
    p = DRD_(hb_get_or_allocate)(hb);
    if (DRD_(s_trace_hb))
-   {
-      VG_(message)(Vg_UserMsg,
-                   "[%d] happens_before 0x%lx\n",
-                   DRD_(thread_get_running_tid)(),
-                   hb);
-   }
+      DRD_(trace_msg)("[%d] happens_before 0x%lx",
+                      DRD_(thread_get_running_tid)(), hb);
 
    if (!p)
       return;
-
-   if (p->done)
-   {
-      GenericErrInfo gei = {
-	 .tid = DRD_(thread_get_running_tid)(),
-	 .addr = hb,
-      };
-      VG_(maybe_record_error)(VG_(get_running_tid)(),
-                              GenericErr,
-                              VG_(get_IP)(VG_(get_running_tid)()),
-                              "happens-before after happens-after",
-                              &gei);
-      return;
-   }
 
    /* Allocate the per-thread data structure if necessary. */
    q = VG_(OSetGen_Lookup)(p->oset, &word_tid);
@@ -215,29 +196,14 @@ void DRD_(hb_happens_after)(const DrdThreadId tid, const Addr hb)
    struct hb_thread_info* q;
    VectorClock old_vc;
 
-   p = DRD_(hb_get)(hb);
+   p = DRD_(hb_get_or_allocate)(hb);
 
    if (DRD_(s_trace_hb))
-   {
-      VG_(message)(Vg_UserMsg, "[%d] happens_after 0x%lx\n",
-                   DRD_(thread_get_running_tid)(), hb);
-   }
+      DRD_(trace_msg)("[%d] happens_after  0x%lx",
+                      DRD_(thread_get_running_tid)(), hb);
 
    if (!p)
-   {
-      GenericErrInfo gei = {
-	 .tid = DRD_(thread_get_running_tid)(),
-	 .addr = hb,
-      };
-      VG_(maybe_record_error)(VG_(get_running_tid)(),
-                              GenericErr,
-                              VG_(get_IP)(VG_(get_running_tid)()),
-                              "missing happens-before annotation",
-                              &gei);
       return;
-   }
-
-   p->done = True;
 
    DRD_(thread_new_segment)(tid);
 
@@ -265,10 +231,8 @@ void DRD_(hb_happens_done)(const DrdThreadId tid, const Addr hb)
    struct hb_info* p;
 
    if (DRD_(s_trace_hb))
-   {
-      VG_(message)(Vg_UserMsg, "[%d] happens_done  0x%lx\n",
-                   DRD_(thread_get_running_tid)(), hb);
-   }
+      DRD_(trace_msg)("[%d] happens_done  0x%lx",
+                      DRD_(thread_get_running_tid)(), hb);
 
    p = DRD_(hb_get)(hb);
    if (!p)

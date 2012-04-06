@@ -7,7 +7,7 @@
    This file is part of Valgrind, a dynamic binary instrumentation
    framework.
 
-   Copyright (C) 2005-2010 Julian Seward
+   Copyright (C) 2005-2011 Julian Seward
       jseward@acm.org
 
    This program is free software; you can redistribute it and/or
@@ -67,6 +67,12 @@ extern unsigned long VKI_PAGE_SHIFT;
 extern unsigned long VKI_PAGE_SIZE;
 #define VKI_MAX_PAGE_SHIFT	16
 #define VKI_MAX_PAGE_SIZE	(1UL << VKI_MAX_PAGE_SHIFT)
+
+//----------------------------------------------------------------------
+// From linux-2.6.35.4/arch/powerpc/include/asm/shmparam.h
+//----------------------------------------------------------------------
+
+#define VKI_SHMLBA  VKI_PAGE_SIZE
 
 //----------------------------------------------------------------------
 // From linux-2.6.9/include/asm-ppc/signal.h
@@ -537,7 +543,7 @@ struct vki_termios {
 #define VKI_FIONBIO		_VKI_IOW('f', 126, int)
 #define VKI_FIONREAD		_VKI_IOR('f', 127, int)
 //#define VKI_TIOCINQ		VKI_FIONREAD
-//#define VKI_FIOQSIZE		_VKI_IOR('f', 128, vki_loff_t)
+#define VKI_FIOQSIZE		_VKI_IOR('f', 128, vki_loff_t)
 
 //#define VKI_TIOCGETP		_VKI_IOR('t', 8, struct vki_sgttyb)
 //#define VKI_TIOCSETP		_VKI_IOW('t', 9, struct vki_sgttyb)

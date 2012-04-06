@@ -7,7 +7,7 @@
    This file is part of Valgrind, a dynamic binary instrumentation
    framework.
 
-   Copyright (C) 2007-2010 Apple Inc.
+   Copyright (C) 2007-2011 Apple Inc.
       Greg Parker  gparker@apple.com
 
    This program is free software; you can redistribute it and/or
@@ -706,6 +706,7 @@ typedef
 
 #define VKI_SHM_RDONLY	SHM_RDONLY
 #define VKI_SHM_RND	SHM_RND
+#define VKI_SHMLBA	SHMLBA
 
 #define vki_shmid_ds shmid_ds
 

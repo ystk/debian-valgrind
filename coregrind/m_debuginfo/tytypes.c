@@ -7,7 +7,7 @@
    This file is part of Valgrind, a dynamic binary instrumentation
    framework.
 
-   Copyright (C) 2008-2010 OpenWorks LLP
+   Copyright (C) 2008-2011 OpenWorks LLP
       info@open-works.co.uk
 
    This program is free software; you can redistribute it and/or
@@ -692,6 +692,8 @@ MaybeULong ML_(sizeOfType)( XArray* /* of TyEnt */ tyents,
                                                   - bo->Te.Bound.boundL + 1) ));
          }
          return eszB;
+      case Te_TyVoid:
+         return mk_MaybeULong_Nothing(); /*UNKNOWN*/
       default:
          VG_(printf)("ML_(sizeOfType): unhandled: ");
          ML_(pp_TyEnt)(ent);

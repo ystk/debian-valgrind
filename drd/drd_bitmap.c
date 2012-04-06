@@ -1,8 +1,8 @@
-/* -*- mode: C; c-basic-offset: 3; -*- */
+/* -*- mode: C; c-basic-offset: 3; indent-tabs-mode: nil; -*- */
 /*
   This file is part of drd, a thread error detector.
 
-  Copyright (C) 2006-2010 Bart Van Assche <bart.vanassche@gmail.com>.
+  Copyright (C) 2006-2011 Bart Van Assche <bvanassche@acm.org>.
 
   This program is free software; you can redistribute it and/or
   modify it under the terms of the GNU General Public License as
@@ -129,7 +129,7 @@ void DRD_(bm_access_range_load)(struct bitmap* const bm, Addr a1, Addr a2)
    Addr b, b_next;
 
    tl_assert(bm);
-   tl_assert(a1 < a2);
+   tl_assert(a1 <= a2);
    tl_assert(a2 < first_address_with_higher_msb(a2));
    tl_assert(a1 == first_address_with_same_lsb(a1));
    tl_assert(a2 == first_address_with_same_lsb(a2));
@@ -226,7 +226,7 @@ void DRD_(bm_access_range_store)(struct bitmap* const bm,
    Addr b, b_next;
 
    tl_assert(bm);
-   tl_assert(a1 < a2);
+   tl_assert(a1 <= a2);
    tl_assert(a2 < first_address_with_higher_msb(a2));
    tl_assert(a1 == first_address_with_same_lsb(a1));
    tl_assert(a2 == first_address_with_same_lsb(a2));
@@ -1051,12 +1051,8 @@ void DRD_(bm_mark)(struct bitmap* bml, struct bitmap* bmr)
         (bm2r = VG_(OSetGen_Next)(bmr->oset)) != 0;
         )
    {
-      /*if (DRD_(bm_has_any_access(bmr, make_address(bm2r->addr, 0),
-        make_address(bm2r->addr + 1, 0))))*/
-      {
-         bm2l = bm2_lookup_or_insert(bml, bm2r->addr);
-         bm2l->recalc = True;
-      }
+      bm2l = bm2_lookup_or_insert(bml, bm2r->addr);
+      bm2l->recalc = True;
    }
 }
 
@@ -1079,8 +1075,6 @@ void DRD_(bm_merge2_marked)(struct bitmap* const lhs, struct bitmap* const rhs)
 {
    struct bitmap2* bm2l;
    struct bitmap2* bm2r;
-
-   tl_assert(lhs != rhs);
 
    /*
     * It's not possible to have two independent iterators over the same OSet,

@@ -7,7 +7,7 @@
    This file is part of Valgrind, a dynamic binary instrumentation
    framework.
 
-   Copyright (C) 2000-2010 Julian Seward
+   Copyright (C) 2000-2011 Julian Seward
       jseward@acm.org
 
    This program is free software; you can redistribute it and/or
@@ -59,27 +59,16 @@
                                        // Supplement 1.7
 
 #elif defined(VGP_arm_linux)
-#  define VG_MIN_INSTR_SZB          4
+#  define VG_MIN_INSTR_SZB          2
 #  define VG_MAX_INSTR_SZB          4 
-#  define VG_CLREQ_SZB             28
+#  define VG_CLREQ_SZB             20
 #  define VG_STACK_REDZONE_SZB      0
 
-#elif defined(VGP_ppc32_aix5)
-#  define VG_MIN_INSTR_SZB          4
-#  define VG_MAX_INSTR_SZB          4 
-#  define VG_CLREQ_SZB             20
-   /* The PowerOpen ABI actually says 220 bytes, but that is not an
-      8-aligned number, and frequently forces Memcheck's
-      mc_{new,die}_mem_stack_N routines into slow cases by losing
-      8-alignment of the area to be messed with.  So let's just say
-      224 instead.  Gdb has a similar kludge. */
-#  define VG_STACK_REDZONE_SZB    224
-
-#elif defined(VGP_ppc64_aix5)
-#  define VG_MIN_INSTR_SZB          4
-#  define VG_MAX_INSTR_SZB          4 
-#  define VG_CLREQ_SZB             20
-#  define VG_STACK_REDZONE_SZB    288 // is this right?
+#elif defined(VGP_s390x_linux)
+#  define VG_MIN_INSTR_SZB          2
+#  define VG_MAX_INSTR_SZB          6
+#  define VG_CLREQ_SZB             10
+#  define VG_STACK_REDZONE_SZB      0  // s390 has no redzone
 
 #elif defined(VGP_x86_darwin)
 #  define VG_MIN_INSTR_SZB          1  // min length of native instruction
@@ -99,13 +88,11 @@
 #endif
 
 // Guest state accessors
-extern Addr VG_(get_SP) ( ThreadId tid );
-extern Addr VG_(get_IP) ( ThreadId tid );
-extern Addr VG_(get_FP) ( ThreadId tid );
-extern Addr VG_(get_LR) ( ThreadId tid );
+// Are mostly in the core_ header.
+//  Only these two are available to tools.
+Addr VG_(get_IP) ( ThreadId tid );
+Addr VG_(get_SP) ( ThreadId tid );
 
-extern void VG_(set_SP) ( ThreadId tid, Addr sp );
-extern void VG_(set_IP) ( ThreadId tid, Addr ip );
 
 // For get/set, 'area' is where the asked-for guest state will be copied
 // into/from.  If shadowNo == 0, the real (non-shadow) guest state is
@@ -148,7 +135,15 @@ extern Bool VG_(thread_stack_next)       ( /*MOD*/ThreadId* tid,
 extern Addr VG_(thread_get_stack_max) ( ThreadId tid );
 
 // Returns how many bytes have been allocated for the stack of the given thread
-extern Addr VG_(thread_get_stack_size) ( ThreadId tid );
+extern SizeT VG_(thread_get_stack_size) ( ThreadId tid );
+
+// Returns the bottommost address of the alternate signal stack.
+// See also the man page of sigaltstack().
+extern Addr VG_(thread_get_altstack_min) ( ThreadId tid );
+
+// Returns how many bytes have been allocated for the alternate signal stack.
+// See also the man page of sigaltstack().
+extern SizeT VG_(thread_get_altstack_size) ( ThreadId tid );
 
 // Given a pointer to a function as obtained by "& functionname" in C,
 // produce a pointer to the actual entry point for the function.  For

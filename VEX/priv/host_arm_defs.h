@@ -1,4 +1,3 @@
-
 /*---------------------------------------------------------------*/
 /*--- begin                                   host_arm_defs.h ---*/
 /*---------------------------------------------------------------*/
@@ -7,7 +6,7 @@
    This file is part of Valgrind, a dynamic binary instrumentation
    framework.
 
-   Copyright (C) 2004-2010 OpenWorks LLP
+   Copyright (C) 2004-2011 OpenWorks LLP
       info@open-works.net
 
    This program is free software; you can redistribute it and/or
@@ -30,6 +29,8 @@
 
 #ifndef __VEX_HOST_ARM_DEFS_H
 #define __VEX_HOST_ARM_DEFS_H
+
+extern UInt arm_hwcaps;
 
 
 /* --------- Registers. --------- */
@@ -66,6 +67,14 @@ extern HReg hregARM_S27 ( void );
 extern HReg hregARM_S28 ( void );
 extern HReg hregARM_S29 ( void );
 extern HReg hregARM_S30 ( void );
+extern HReg hregARM_Q8  ( void );
+extern HReg hregARM_Q9  ( void );
+extern HReg hregARM_Q10 ( void );
+extern HReg hregARM_Q11 ( void );
+extern HReg hregARM_Q12 ( void );
+extern HReg hregARM_Q13 ( void );
+extern HReg hregARM_Q14 ( void );
+extern HReg hregARM_Q15 ( void );
 
 /* Number of registers used arg passing in function calls */
 #define ARM_N_ARGREGS 4   /* r0, r1, r2, r3 */
@@ -182,6 +191,34 @@ extern ARMAModeV* mkARMAModeV ( HReg reg, Int simm11 );
 
 extern void ppARMAModeV ( ARMAModeV* );
 
+/* --- Addressing Mode suitable for Neon --- */
+typedef
+   enum {
+      ARMamN_R=5,
+      ARMamN_RR
+      /* ... */
+   }
+   ARMAModeNTag;
+
+typedef
+   struct {
+      ARMAModeNTag tag;
+      union {
+         struct {
+            HReg rN;
+            HReg rM;
+         } RR;
+         struct {
+            HReg rN;
+         } R;
+         /* ... */
+      } ARMamN;
+   }
+   ARMAModeN;
+
+extern ARMAModeN* mkARMAModeN_RR ( HReg, HReg );
+extern ARMAModeN* mkARMAModeN_R ( HReg );
+extern void ppARMAModeN ( ARMAModeN* );
 
 /* --------- Reg or imm-8x4 operands --------- */
 /* a.k.a (a very restricted form of) Shifter Operand,
@@ -189,7 +226,7 @@ extern void ppARMAModeV ( ARMAModeV* );
 
 typedef
    enum {
-      ARMri84_I84=5,   /* imm8 `ror` (2 * imm4) */
+      ARMri84_I84=7,   /* imm8 `ror` (2 * imm4) */
       ARMri84_R        /* reg */
    }
    ARMRI84Tag;
@@ -218,7 +255,7 @@ extern void ppARMRI84 ( ARMRI84* );
 /* --------- Reg or imm5 operands --------- */
 typedef
    enum {
-      ARMri5_I5=7,   /* imm5, 1 .. 31 only (no zero!) */
+      ARMri5_I5=9,   /* imm5, 1 .. 31 only (no zero!) */
       ARMri5_R       /* reg */
    }
    ARMRI5Tag;
@@ -242,13 +279,69 @@ extern ARMRI5* ARMRI5_R  ( HReg );
 
 extern void ppARMRI5 ( ARMRI5* );
 
+/* -------- Neon Immediate operand -------- */
+
+/* imm8 = abcdefgh, B = NOT(b);
+
+type | value (64bit binary)
+-----+-------------------------------------------------------------------------
+   0 | 00000000 00000000 00000000 abcdefgh 00000000 00000000 00000000 abcdefgh
+   1 | 00000000 00000000 abcdefgh 00000000 00000000 00000000 abcdefgh 00000000
+   2 | 00000000 abcdefgh 00000000 00000000 00000000 abcdefgh 00000000 00000000
+   3 | abcdefgh 00000000 00000000 00000000 abcdefgh 00000000 00000000 00000000
+   4 | 00000000 abcdefgh 00000000 abcdefgh 00000000 abcdefgh 00000000 abcdefgh
+   5 | abcdefgh 00000000 abcdefgh 00000000 abcdefgh 00000000 abcdefgh 00000000
+   6 | abcdefgh abcdefgh abcdefgh abcdefgh abcdefgh abcdefgh abcdefgh abcdefgh
+   7 | 00000000 00000000 abcdefgh 11111111 00000000 00000000 abcdefgh 11111111
+   8 | 00000000 abcdefgh 11111111 11111111 00000000 abcdefgh 11111111 11111111
+   9 | aaaaaaaa bbbbbbbb cccccccc dddddddd eeeeeeee ffffffff gggggggg hhhhhhhh
+  10 | aBbbbbbc defgh000 00000000 00000000 aBbbbbbc defgh000 00000000 00000000
+-----+-------------------------------------------------------------------------
+
+Type 10 is:
+   (-1)^S * 2^exp * mantissa
+where S = a, exp = UInt(B:c:d) - 3, mantissa = (16 + UInt(e:f:g:h)) / 16
+*/
+
+typedef
+   struct {
+      UInt type;
+      UInt imm8;
+   }
+   ARMNImm;
+
+extern ARMNImm* ARMNImm_TI ( UInt type, UInt imm8 );
+extern ULong ARMNImm_to_Imm64 ( ARMNImm* );
+extern ARMNImm* Imm64_to_ARMNImm ( ULong );
+
+extern void ppARMNImm ( ARMNImm* );
+
+/* ------ Neon Register or Scalar Operand ------ */
+
+typedef
+   enum {
+      ARMNRS_Reg=11,
+      ARMNRS_Scalar
+   }
+   ARMNRS_tag;
+
+typedef
+   struct {
+      ARMNRS_tag tag;
+      HReg reg;
+      UInt index;
+   }
+   ARMNRS;
+
+extern ARMNRS* mkARMNRS(ARMNRS_tag, HReg reg, UInt index);
+extern void ppARMNRS ( ARMNRS* );
 
 /* --------- Instructions. --------- */
 
 /* --------- */
 typedef
    enum {
-      ARMalu_ADD=10,   /* plain 32-bit add */
+      ARMalu_ADD=20,   /* plain 32-bit add */
       ARMalu_ADDS,     /* 32-bit add, and set the flags */
       ARMalu_ADC,      /* 32-bit add with carry */
       ARMalu_SUB,      /* plain 32-bit subtract */
@@ -266,7 +359,7 @@ extern HChar* showARMAluOp ( ARMAluOp op );
 
 typedef
    enum {
-      ARMsh_SHL=20,
+      ARMsh_SHL=40,
       ARMsh_SHR,
       ARMsh_SAR
    }
@@ -277,7 +370,7 @@ extern HChar* showARMShiftOp ( ARMShiftOp op );
 
 typedef
    enum {
-      ARMun_NEG=30,
+      ARMun_NEG=50,
       ARMun_NOT,
       ARMun_CLZ
    }
@@ -288,7 +381,7 @@ extern HChar* showARMUnaryOp ( ARMUnaryOp op );
 
 typedef
    enum {
-      ARMmul_PLAIN=40,
+      ARMmul_PLAIN=60,
       ARMmul_ZX,
       ARMmul_SX
    }
@@ -299,7 +392,7 @@ extern HChar* showARMMulOp ( ARMMulOp op );
 
 typedef
    enum {
-      ARMvfp_ADD=50,
+      ARMvfp_ADD=70,
       ARMvfp_SUB,
       ARMvfp_MUL,
       ARMvfp_DIV
@@ -311,7 +404,7 @@ extern HChar* showARMVfpOp ( ARMVfpOp op );
 
 typedef
    enum {
-      ARMvfpu_COPY=60,
+      ARMvfpu_COPY=80,
       ARMvfpu_NEG,
       ARMvfpu_ABS,
       ARMvfpu_SQRT
@@ -320,11 +413,148 @@ typedef
 
 extern HChar* showARMVfpUnaryOp ( ARMVfpUnaryOp op );
 
+typedef
+   enum {
+      ARMneon_VAND=90,
+      ARMneon_VORR,
+      ARMneon_VXOR,
+      ARMneon_VADD,
+      ARMneon_VADDFP,
+      ARMneon_VRHADDS,
+      ARMneon_VRHADDU,
+      ARMneon_VPADDFP,
+      ARMneon_VABDFP,
+      ARMneon_VSUB,
+      ARMneon_VSUBFP,
+      ARMneon_VMAXU,
+      ARMneon_VMAXS,
+      ARMneon_VMAXF,
+      ARMneon_VMINU,
+      ARMneon_VMINS,
+      ARMneon_VMINF,
+      ARMneon_VQADDU,
+      ARMneon_VQADDS,
+      ARMneon_VQSUBU,
+      ARMneon_VQSUBS,
+      ARMneon_VCGTU,
+      ARMneon_VCGTS,
+      ARMneon_VCGEU,
+      ARMneon_VCGES,
+      ARMneon_VCGTF,
+      ARMneon_VCGEF,
+      ARMneon_VCEQ,
+      ARMneon_VCEQF,
+      ARMneon_VEXT,
+      ARMneon_VMUL,
+      ARMneon_VMULFP,
+      ARMneon_VMULLU,
+      ARMneon_VMULLS,
+      ARMneon_VMULP,
+      ARMneon_VMULLP,
+      ARMneon_VQDMULH,
+      ARMneon_VQRDMULH,
+      ARMneon_VPADD,
+      ARMneon_VPMINU,
+      ARMneon_VPMINS,
+      ARMneon_VPMINF,
+      ARMneon_VPMAXU,
+      ARMneon_VPMAXS,
+      ARMneon_VPMAXF,
+      ARMneon_VTBL,
+      ARMneon_VQDMULL,
+      ARMneon_VRECPS,
+      ARMneon_VRSQRTS,
+      /* ... */
+   }
+   ARMNeonBinOp;
+
+typedef
+   enum {
+      ARMneon_VSHL=150,
+      ARMneon_VSAL, /* Yah, not SAR but SAL */
+      ARMneon_VQSHL,
+      ARMneon_VQSAL
+   }
+   ARMNeonShiftOp;
+
+typedef
+   enum {
+      ARMneon_COPY=160,
+      ARMneon_COPYLU,
+      ARMneon_COPYLS,
+      ARMneon_COPYN,
+      ARMneon_COPYQNSS,
+      ARMneon_COPYQNUS,
+      ARMneon_COPYQNUU,
+      ARMneon_NOT,
+      ARMneon_EQZ,
+      ARMneon_DUP,
+      ARMneon_PADDLS,
+      ARMneon_PADDLU,
+      ARMneon_CNT,
+      ARMneon_CLZ,
+      ARMneon_CLS,
+      ARMneon_VCVTxFPxINT,
+      ARMneon_VQSHLNSS,
+      ARMneon_VQSHLNUU,
+      ARMneon_VQSHLNUS,
+      ARMneon_VCVTFtoU,
+      ARMneon_VCVTFtoS,
+      ARMneon_VCVTUtoF,
+      ARMneon_VCVTStoF,
+      ARMneon_VCVTFtoFixedU,
+      ARMneon_VCVTFtoFixedS,
+      ARMneon_VCVTFixedUtoF,
+      ARMneon_VCVTFixedStoF,
+      ARMneon_VCVTF16toF32,
+      ARMneon_VCVTF32toF16,
+      ARMneon_REV16,
+      ARMneon_REV32,
+      ARMneon_REV64,
+      ARMneon_ABS,
+      ARMneon_VNEGF,
+      ARMneon_VRECIP,
+      ARMneon_VRECIPF,
+      ARMneon_VABSFP,
+      ARMneon_VRSQRTEFP,
+      ARMneon_VRSQRTE
+      /* ... */
+   }
+   ARMNeonUnOp;
+
+typedef
+   enum {
+      ARMneon_SETELEM=200,
+      ARMneon_GETELEMU,
+      ARMneon_GETELEMS,
+      ARMneon_VDUP,
+   }
+   ARMNeonUnOpS;
+
+typedef
+   enum {
+      ARMneon_TRN=210,
+      ARMneon_ZIP,
+      ARMneon_UZP
+      /* ... */
+   }
+   ARMNeonDualOp;
+
+extern HChar* showARMNeonBinOp ( ARMNeonBinOp op );
+extern HChar* showARMNeonUnOp ( ARMNeonUnOp op );
+extern HChar* showARMNeonUnOpS ( ARMNeonUnOpS op );
+extern HChar* showARMNeonShiftOp ( ARMNeonShiftOp op );
+extern HChar* showARMNeonDualOp ( ARMNeonDualOp op );
+extern HChar* showARMNeonBinOpDataType ( ARMNeonBinOp op );
+extern HChar* showARMNeonUnOpDataType ( ARMNeonUnOp op );
+extern HChar* showARMNeonUnOpSDataType ( ARMNeonUnOpS op );
+extern HChar* showARMNeonShiftOpDataType ( ARMNeonShiftOp op );
+extern HChar* showARMNeonDualOpDataType ( ARMNeonDualOp op );
 
 typedef
    enum {
       /* baseline */
-      ARMin_Alu=70,
+      ARMin_Alu=220,
       ARMin_Shift,
       ARMin_Unary,
       ARMin_CmpOrTst,
@@ -355,7 +585,28 @@ typedef
       ARMin_VXferS,
       ARMin_VCvtID,
       ARMin_FPSCR,
-      ARMin_MFence
+      ARMin_MFence,
+      ARMin_CLREX,
+      /* Neon */
+      ARMin_NLdStQ,
+      ARMin_NLdStD,
+      ARMin_NUnary,
+      ARMin_NUnaryS,
+      ARMin_NDual,
+      ARMin_NBinary,
+      ARMin_NBinaryS,
+      ARMin_NShift,
+      ARMin_NeonImm,
+      ARMin_NCMovQ,
+      /* This is not a NEON instruction. Actually there is no corresponding
+         instruction in ARM instruction set at all. We need this one to
+         generate spill/reload of 128-bit registers since current register
+         allocator demands them to consist of no more than two instructions.
+         We will split this instruction into 2 or 3 ARM instructions on the
+         emiting phase.
+
+         NOTE: source and destination registers should be different! */
+      ARMin_Add32
    }
    ARMInstrTag;
 
@@ -458,18 +709,21 @@ typedef
          struct {
             ARMMulOp op;
          } Mul;
-         /* LDREX{,H,B} r0, [r1]
+         /* LDREX{,H,B} r2, [r4]  and
+            LDREXD r2, r3, [r4]   (on LE hosts, transferred value is r3:r2)
             Again, hardwired registers since this is not performance
             critical, and there are possibly constraints on the
             registers that we can't express in the register allocator.*/
          struct {
-            Int  szB; /* currently only 4 is allowed */
+            Int  szB; /* 1, 2, 4 or 8 */
          } LdrEX;
-         /* STREX{,H,B} r0, r1, [r2]
-            r0 = SC( [r2] = r1 )
+         /* STREX{,H,B} r0, r2, [r4]  and  
+            STREXD r0, r2, r3, [r4]   (on LE hosts, transferred value is r3:r2)
+            r0 = SC( [r4] = r2 )      (8, 16, 32 bit transfers)
+            r0 = SC( [r4] = r3:r2)    (64 bit transfers)
             Ditto comment re fixed registers. */
          struct {
-            Int  szB; /* currently only 4 is allowed */
+            Int  szB; /* 1, 2, 4 or 8 */
          } StrEX;
          /* VFP INSTRUCTIONS */
          /* 64-bit Fp load/store */
@@ -573,7 +827,84 @@ typedef
          */
          struct {
          } MFence;
-
+         /* A CLREX instruction. */
+         struct {
+         } CLREX;
+         /* Neon data processing instruction: 3 registers of the same
+            length */
+         struct {
+            ARMNeonBinOp op;
+            HReg dst;
+            HReg argL;
+            HReg argR;
+            UInt size;
+            Bool Q;
+         } NBinary;
+         struct {
+            ARMNeonBinOp op;
+            ARMNRS* dst;
+            ARMNRS* argL;
+            ARMNRS* argR;
+            UInt size;
+            Bool Q;
+         } NBinaryS;
+         struct {
+            ARMNeonShiftOp op;
+            HReg dst;
+            HReg argL;
+            HReg argR;
+            UInt size;
+            Bool Q;
+         } NShift;
+         struct {
+            Bool isLoad;
+            HReg dQ;
+            ARMAModeN *amode;
+         } NLdStQ;
+         struct {
+            Bool isLoad;
+            HReg dD;
+            ARMAModeN *amode;
+         } NLdStD;
+         struct {
+            ARMNeonUnOpS op;
+            ARMNRS*  dst;
+            ARMNRS*  src;
+            UInt size;
+            Bool Q;
+         } NUnaryS;
+         struct {
+            ARMNeonUnOp op;
+            HReg  dst;
+            HReg  src;
+            UInt size;
+            Bool Q;
+         } NUnary;
+         /* Takes two arguments and modifies them both. */
+         struct {
+            ARMNeonDualOp op;
+            HReg  arg1;
+            HReg  arg2;
+            UInt size;
+            Bool Q;
+         } NDual;
+         struct {
+            HReg dst;
+            ARMNImm* imm;
+         } NeonImm;
+         /* 128-bit Neon move src to dst on the given condition, which
+            may not be ARMcc_AL. */
+         struct {
+            ARMCondCode cond;
+            HReg        dst;
+            HReg        src;
+         } NCMovQ;
+         struct {
+            /* Note: rD != rN */
+            HReg rD;
+            HReg rN;
+            UInt imm32;
+         } Add32;
       } ARMin;
    }
    ARMInstr;
@@ -612,6 +943,20 @@ extern ARMInstr* ARMInstr_VCvtID   ( Bool iToD, Bool syned,
                                      HReg dst, HReg src );
 extern ARMInstr* ARMInstr_FPSCR    ( Bool toFPSCR, HReg iReg );
 extern ARMInstr* ARMInstr_MFence   ( void );
+extern ARMInstr* ARMInstr_CLREX    ( void );
+extern ARMInstr* ARMInstr_NLdStQ   ( Bool isLoad, HReg, ARMAModeN* );
+extern ARMInstr* ARMInstr_NLdStD   ( Bool isLoad, HReg, ARMAModeN* );
+extern ARMInstr* ARMInstr_NUnary   ( ARMNeonUnOp, HReg, HReg, UInt, Bool );
+extern ARMInstr* ARMInstr_NUnaryS  ( ARMNeonUnOpS, ARMNRS*, ARMNRS*,
+                                     UInt, Bool );
+extern ARMInstr* ARMInstr_NDual    ( ARMNeonDualOp, HReg, HReg, UInt, Bool );
+extern ARMInstr* ARMInstr_NBinary  ( ARMNeonBinOp, HReg, HReg, HReg,
+                                     UInt, Bool );
+extern ARMInstr* ARMInstr_NShift   ( ARMNeonShiftOp, HReg, HReg, HReg,
+                                     UInt, Bool );
+extern ARMInstr* ARMInstr_NeonImm  ( HReg, ARMNImm* );
+extern ARMInstr* ARMInstr_NCMovQ   ( ARMCondCode, HReg, HReg );
+extern ARMInstr* ARMInstr_Add32    ( HReg rD, HReg rN, UInt imm32 );
 
 extern void ppARMInstr ( ARMInstr* );
 
@@ -622,7 +967,9 @@ extern void getRegUsage_ARMInstr ( HRegUsage*, ARMInstr*, Bool );
 extern void mapRegs_ARMInstr     ( HRegRemap*, ARMInstr*, Bool );
 extern Bool isMove_ARMInstr      ( ARMInstr*, HReg*, HReg* );
 extern Int  emit_ARMInstr        ( UChar* buf, Int nbuf, ARMInstr*, 
-                                   Bool, void* dispatch );
+                                   Bool,
+                                   void* dispatch_unassisted,
+                                   void* dispatch_assisted );
 
 extern void genSpill_ARM  ( /*OUT*/HInstr** i1, /*OUT*/HInstr** i2,
                             HReg rreg, Int offset, Bool );

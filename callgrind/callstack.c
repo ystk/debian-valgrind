@@ -6,7 +6,7 @@
 /*
    This file is part of Callgrind, a Valgrind tool for call tracing.
 
-   Copyright (C) 2002-2010, Josef Weidendorfer (Josef.Weidendorfer@gmx.de)
+   Copyright (C) 2002-2011, Josef Weidendorfer (Josef.Weidendorfer@gmx.de)
 
    This program is free software; you can redistribute it and/or
    modify it under the terms of the GNU General Public License as
@@ -394,11 +394,13 @@ void CLG_(pop_call_stack)()
 }
 
 
-/* remove CallStack items to sync with current SP
+/* Unwind enough CallStack items to sync with current stack pointer.
+ * Returns the number of stack frames unwinded.
  */
-void CLG_(unwind_call_stack)(Addr sp, Int minpops)
+Int CLG_(unwind_call_stack)(Addr sp, Int minpops)
 {
     Int csp;
+    Int unwind_count = 0;
     CLG_DEBUG(4,"+ unwind_call_stack(sp %#lx, minpops %d): frame %d\n",
 	      sp, minpops, CLG_(current_call_stack).sp);
 
@@ -415,6 +417,7 @@ void CLG_(unwind_call_stack)(Addr sp, Int minpops)
 	    ((top_ce->sp == sp) && minpops>0)) {
 
 	    minpops--;
+	    unwind_count++;
 	    CLG_(pop_call_stack)();
 	    csp=CLG_(current_call_stack).sp;
 	    continue;
@@ -423,4 +426,5 @@ void CLG_(unwind_call_stack)(Addr sp, Int minpops)
     }
 
     CLG_DEBUG(4,"- unwind_call_stack\n");
+    return unwind_count;
 }

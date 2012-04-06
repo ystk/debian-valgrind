@@ -7,7 +7,7 @@
    This file is part of Valgrind, a dynamic binary instrumentation
    framework.
 
-   Copyright (C) 2004-2010 OpenWorks LLP
+   Copyright (C) 2004-2011 OpenWorks LLP
       info@open-works.net
 
    This program is free software; you can redistribute it and/or
@@ -824,6 +824,9 @@ ULong LibVEX_GuestAMD64_get_rflags ( /*IN*/VexGuestAMD64State* vex_state )
       rflags |= (1<<10);
    if (vex_state->guest_IDFLAG == 1)
       rflags |= (1<<21);
+   if (vex_state->guest_ACFLAG == 1)
+      rflags |= (1<<18);
+
    return rflags;
 }
 
@@ -867,11 +870,14 @@ static Bool isU64 ( IRExpr* e, ULong n )
 }
 
 IRExpr* guest_amd64_spechelper ( HChar* function_name,
-                                 IRExpr** args )
+                                 IRExpr** args,
+                                 IRStmt** precedingStmts,
+                                 Int      n_precedingStmts )
 {
 #  define unop(_op,_a1) IRExpr_Unop((_op),(_a1))
 #  define binop(_op,_a1,_a2) IRExpr_Binop((_op),(_a1),(_a2))
 #  define mkU64(_n) IRExpr_Const(IRConst_U64(_n))
+#  define mkU32(_n) IRExpr_Const(IRConst_U32(_n))
 #  define mkU8(_n)  IRExpr_Const(IRConst_U8(_n))
 
    Int i, arity = 0;
@@ -954,34 +960,34 @@ IRExpr* guest_amd64_spechelper ( HChar* function_name,
       if (isU64(cc_op, AMD64G_CC_OP_SUBL) && isU64(cond, AMD64CondZ)) {
          /* long sub/cmp, then Z --> test dst==src */
          return unop(Iop_1Uto64,
-                     binop(Iop_CmpEQ64, 
-                           binop(Iop_Shl64,cc_dep1,mkU8(32)),
-                           binop(Iop_Shl64,cc_dep2,mkU8(32))));
+                     binop(Iop_CmpEQ32,
+                           unop(Iop_64to32, cc_dep1),
+                           unop(Iop_64to32, cc_dep2)));
       }
       if (isU64(cc_op, AMD64G_CC_OP_SUBL) && isU64(cond, AMD64CondNZ)) {
          /* long sub/cmp, then NZ --> test dst!=src */
          return unop(Iop_1Uto64,
-                     binop(Iop_CmpNE64, 
-                           binop(Iop_Shl64,cc_dep1,mkU8(32)),
-                           binop(Iop_Shl64,cc_dep2,mkU8(32))));
+                     binop(Iop_CmpNE32,
+                           unop(Iop_64to32, cc_dep1),
+                           unop(Iop_64to32, cc_dep2)));
       }
 
       if (isU64(cc_op, AMD64G_CC_OP_SUBL) && isU64(cond, AMD64CondL)) {
          /* long sub/cmp, then L (signed less than) 
             --> test dst <s src */
          return unop(Iop_1Uto64,
-                     binop(Iop_CmpLT64S, 
-                           binop(Iop_Shl64,cc_dep1,mkU8(32)),
-                           binop(Iop_Shl64,cc_dep2,mkU8(32))));
+                     binop(Iop_CmpLT32S,
+                           unop(Iop_64to32, cc_dep1),
+                           unop(Iop_64to32, cc_dep2)));
       }
 
       if (isU64(cc_op, AMD64G_CC_OP_SUBL) && isU64(cond, AMD64CondLE)) {
          /* long sub/cmp, then LE (signed less than or equal) 
             --> test dst <=s src */
          return unop(Iop_1Uto64,
-                     binop(Iop_CmpLE64S, 
-                           binop(Iop_Shl64,cc_dep1,mkU8(32)),
-                           binop(Iop_Shl64,cc_dep2,mkU8(32))));
+                     binop(Iop_CmpLE32S,
+                           unop(Iop_64to32, cc_dep1),
+                           unop(Iop_64to32, cc_dep2)));
 
       }
       if (isU64(cc_op, AMD64G_CC_OP_SUBL) && isU64(cond, AMD64CondNLE)) {
@@ -990,9 +996,9 @@ IRExpr* guest_amd64_spechelper ( HChar* function_name,
             --> test (dst >s src)
             --> test (src <s dst) */
          return unop(Iop_1Uto64,
-                     binop(Iop_CmpLT64S,
-                           binop(Iop_Shl64,cc_dep2,mkU8(32)),
-                           binop(Iop_Shl64,cc_dep1,mkU8(32))));
+                     binop(Iop_CmpLT32S,
+                           unop(Iop_64to32, cc_dep2),
+                           unop(Iop_64to32, cc_dep1)));
 
       }
 
@@ -1000,28 +1006,37 @@ IRExpr* guest_amd64_spechelper ( HChar* function_name,
          /* long sub/cmp, then BE (unsigned less than or equal)
             --> test dst <=u src */
          return unop(Iop_1Uto64,
-                     binop(Iop_CmpLE64U, 
-                           binop(Iop_Shl64,cc_dep1,mkU8(32)),
-                           binop(Iop_Shl64,cc_dep2,mkU8(32))));
+                     binop(Iop_CmpLE32U, 
+                           unop(Iop_64to32, cc_dep1),
+                           unop(Iop_64to32, cc_dep2)));
       }
       if (isU64(cc_op, AMD64G_CC_OP_SUBL) && isU64(cond, AMD64CondNBE)) {
          /* long sub/cmp, then NBE (unsigned greater than)
             --> test src <u dst */
          /* Note, args are opposite way round from the usual */
          return unop(Iop_1Uto64,
-                     binop(Iop_CmpLT64U, 
-                           binop(Iop_Shl64,cc_dep2,mkU8(32)),
-                           binop(Iop_Shl64,cc_dep1,mkU8(32))));
+                     binop(Iop_CmpLT32U, 
+                           unop(Iop_64to32, cc_dep2),
+                           unop(Iop_64to32, cc_dep1)));
       }
 
       if (isU64(cc_op, AMD64G_CC_OP_SUBL) && isU64(cond, AMD64CondS)) {
          /* long sub/cmp, then S (negative) --> test (dst-src <s 0) */
          return unop(Iop_1Uto64,
-                     binop(Iop_CmpLT64S,
-                           binop(Iop_Sub64,
-                                 binop(Iop_Shl64, cc_dep1, mkU8(32)), 
-                                 binop(Iop_Shl64, cc_dep2, mkU8(32))),
-                           mkU64(0)));
+                     binop(Iop_CmpLT32S,
+                           binop(Iop_Sub32,
+                                 unop(Iop_64to32, cc_dep1), 
+                                 unop(Iop_64to32, cc_dep2)),
+                           mkU32(0)));
+      }
+
+      if (isU64(cc_op, AMD64G_CC_OP_SUBL) && isU64(cond, AMD64CondB)) {
+         /* long sub/cmp, then B (unsigned less than)
+            --> test dst <u src */
+         return unop(Iop_1Uto64,
+                     binop(Iop_CmpLT32U,
+                           unop(Iop_64to32, cc_dep1),
+                           unop(Iop_64to32, cc_dep2)));
       }
 
       /*---------------- SUBW ----------------*/
@@ -1068,6 +1083,15 @@ IRExpr* guest_amd64_spechelper ( HChar* function_name,
                            unop(Iop_64to8,cc_dep2)));
       }
 
+      if (isU64(cc_op, AMD64G_CC_OP_SUBB) && isU64(cond, AMD64CondBE)) {
+         /* byte sub/cmp, then BE (unsigned less than or equal)
+            --> test dst <=u src */
+         return unop(Iop_1Uto64,
+                     binop(Iop_CmpLE64U, 
+                           binop(Iop_And64, cc_dep1, mkU64(0xFF)),
+                           binop(Iop_And64, cc_dep2, mkU64(0xFF))));
+      }
+
       if (isU64(cc_op, AMD64G_CC_OP_SUBB) && isU64(cond, AMD64CondS)
                                           && isU64(cc_dep2, 0)) {
          /* byte sub/cmp of zero, then S --> test (dst-0 <s 0)
@@ -1102,6 +1126,11 @@ IRExpr* guest_amd64_spechelper ( HChar* function_name,
          return unop(Iop_1Uto64,
                      binop(Iop_CmpEQ64, cc_dep1, mkU64(0)));
       }
+      if (isU64(cc_op, AMD64G_CC_OP_LOGICQ) && isU64(cond, AMD64CondNZ)) {
+         /* long long and/or/xor, then NZ --> test dst!=0 */
+         return unop(Iop_1Uto64,
+                     binop(Iop_CmpNE64, cc_dep1, mkU64(0)));
+      }
 
       if (isU64(cc_op, AMD64G_CC_OP_LOGICQ) && isU64(cond, AMD64CondL)) {
          /* long long and/or/xor, then L
@@ -1121,17 +1150,16 @@ IRExpr* guest_amd64_spechelper ( HChar* function_name,
       if (isU64(cc_op, AMD64G_CC_OP_LOGICL) && isU64(cond, AMD64CondZ)) {
          /* long and/or/xor, then Z --> test dst==0 */
          return unop(Iop_1Uto64,
-                     binop(Iop_CmpEQ64, 
-                           binop(Iop_Shl64,cc_dep1,mkU8(32)), 
-                           mkU64(0)));
+                     binop(Iop_CmpEQ32,
+                           unop(Iop_64to32, cc_dep1), 
+                           mkU32(0)));
       }
-
       if (isU64(cc_op, AMD64G_CC_OP_LOGICL) && isU64(cond, AMD64CondNZ)) {
          /* long and/or/xor, then NZ --> test dst!=0 */
          return unop(Iop_1Uto64,
-                     binop(Iop_CmpNE64, 
-                           binop(Iop_Shl64,cc_dep1,mkU8(32)), 
-                           mkU64(0)));
+                     binop(Iop_CmpNE32,
+                           unop(Iop_64to32, cc_dep1), 
+                           mkU32(0)));
       }
 
       if (isU64(cc_op, AMD64G_CC_OP_LOGICL) && isU64(cond, AMD64CondLE)) {
@@ -1142,9 +1170,24 @@ IRExpr* guest_amd64_spechelper ( HChar* function_name,
             the result is <=signed 0.  Hence ...
          */
          return unop(Iop_1Uto64,
-                     binop(Iop_CmpLE64S, 
-                           binop(Iop_Shl64,cc_dep1,mkU8(32)), 
-                           mkU64(0)));
+                     binop(Iop_CmpLE32S,
+                           unop(Iop_64to32, cc_dep1), 
+                           mkU32(0)));
+      }
+
+      if (isU64(cc_op, AMD64G_CC_OP_LOGICL) && isU64(cond, AMD64CondS)) {
+         /* long and/or/xor, then S --> (ULong)result[31] */
+         return binop(Iop_And64,
+                      binop(Iop_Shr64, cc_dep1, mkU8(31)),
+                      mkU64(1));
+      }
+      if (isU64(cc_op, AMD64G_CC_OP_LOGICL) && isU64(cond, AMD64CondNS)) {
+         /* long and/or/xor, then S --> (ULong) ~ result[31] */
+         return binop(Iop_Xor64,
+                binop(Iop_And64,
+                      binop(Iop_Shr64, cc_dep1, mkU8(31)),
+                      mkU64(1)),
+                mkU64(1));
       }
 
       /*---------------- LOGICB ----------------*/
@@ -1174,6 +1217,14 @@ IRExpr* guest_amd64_spechelper ( HChar* function_name,
                       binop(Iop_Shr64,cc_dep1,mkU8(7)),
                       mkU64(1));
       }
+      if (isU64(cc_op, AMD64G_CC_OP_LOGICB) && isU64(cond, AMD64CondNS)) {
+         /* byte and/or/xor, then NS --> (UInt)!result[7] */
+         return binop(Iop_Xor64,
+                      binop(Iop_And64,
+                            binop(Iop_Shr64,cc_dep1,mkU8(7)),
+                            mkU64(1)),
+                      mkU64(1));
+      }
 
       /*---------------- INCB ----------------*/
 
@@ -1201,9 +1252,9 @@ IRExpr* guest_amd64_spechelper ( HChar* function_name,
       if (isU64(cc_op, AMD64G_CC_OP_DECL) && isU64(cond, AMD64CondZ)) {
          /* dec L, then Z --> test dst == 0 */
          return unop(Iop_1Uto64,
-                     binop(Iop_CmpEQ64,
-                           binop(Iop_Shl64,cc_dep1,mkU8(32)),
-                           mkU64(0)));
+                     binop(Iop_CmpEQ32,
+                           unop(Iop_64to32, cc_dep1),
+                           mkU32(0)));
       }
 
       /*---------------- DECW ----------------*/
@@ -1324,9 +1375,9 @@ IRExpr* guest_amd64_spechelper ( HChar* function_name,
       if (isU64(cc_op, AMD64G_CC_OP_SUBL)) {
          /* C after sub denotes unsigned less than */
          return unop(Iop_1Uto64,
-                     binop(Iop_CmpLT64U, 
-                           binop(Iop_Shl64,cc_dep1,mkU8(32)), 
-                           binop(Iop_Shl64,cc_dep2,mkU8(32))));
+                     binop(Iop_CmpLT32U,
+                           unop(Iop_64to32, cc_dep1), 
+                           unop(Iop_64to32, cc_dep2)));
       }
       if (isU64(cc_op, AMD64G_CC_OP_SUBB)) {
          /* C after sub denotes unsigned less than */
@@ -1360,6 +1411,7 @@ IRExpr* guest_amd64_spechelper ( HChar* function_name,
 #  undef unop
 #  undef binop
 #  undef mkU64
+#  undef mkU32
 #  undef mkU8
 
    return NULL;
@@ -1446,6 +1498,68 @@ ULong amd64g_calculate_FXAM ( ULong tag, ULong dbl )
    */
    /* vex_printf("normal\n"); */
    return 0 | AMD64G_FC_MASK_C2 | (sign << AMD64G_FC_SHIFT_C1) | 0;
+}
+
+
+/* This is used to implement both 'frstor' and 'fldenv'.  The latter
+   appears to differ from the former only in that the 8 FP registers
+   themselves are not transferred into the guest state. */
+static
+VexEmWarn do_put_x87 ( Bool moveRegs,
+                       /*IN*/UChar* x87_state,
+                       /*OUT*/VexGuestAMD64State* vex_state )
+{
+   Int        stno, preg;
+   UInt       tag;
+   ULong*     vexRegs = (ULong*)(&vex_state->guest_FPREG[0]);
+   UChar*     vexTags = (UChar*)(&vex_state->guest_FPTAG[0]);
+   Fpu_State* x87     = (Fpu_State*)x87_state;
+   UInt       ftop    = (x87->env[FP_ENV_STAT] >> 11) & 7;
+   UInt       tagw    = x87->env[FP_ENV_TAG];
+   UInt       fpucw   = x87->env[FP_ENV_CTRL];
+   UInt       c3210   = x87->env[FP_ENV_STAT] & 0x4700;
+   VexEmWarn  ew;
+   UInt       fpround;
+   ULong      pair;
+
+   /* Copy registers and tags */
+   for (stno = 0; stno < 8; stno++) {
+      preg = (stno + ftop) & 7;
+      tag = (tagw >> (2*preg)) & 3;
+      if (tag == 3) {
+         /* register is empty */
+         /* hmm, if it's empty, does it still get written?  Probably
+            safer to say it does.  If we don't, memcheck could get out
+            of sync, in that it thinks all FP registers are defined by
+            this helper, but in reality some have not been updated. */
+         if (moveRegs)
+            vexRegs[preg] = 0; /* IEEE754 64-bit zero */
+         vexTags[preg] = 0;
+      } else {
+         /* register is non-empty */
+         if (moveRegs)
+            convert_f80le_to_f64le( &x87->reg[10*stno], 
+                                    (UChar*)&vexRegs[preg] );
+         vexTags[preg] = 1;
+      }
+   }
+
+   /* stack pointer */
+   vex_state->guest_FTOP = ftop;
+
+   /* status word */
+   vex_state->guest_FC3210 = c3210;
+
+   /* handle the control word, setting FPROUND and detecting any
+      emulation warnings. */
+   pair    = amd64g_check_fldcw ( (ULong)fpucw );
+   fpround = (UInt)pair;
+   ew      = (VexEmWarn)(pair >> 32);
+   
+   vex_state->guest_FPROUND = fpround & 3;
+
+   /* emulation warnings --> caller */
+   return ew;
 }
 
 
@@ -1602,6 +1716,94 @@ void amd64g_dirtyhelper_FXSAVE ( VexGuestAMD64State* gst, HWord addr )
    COPY_U128( xmm[15], gst->guest_XMM15 );
 
 #  undef COPY_U128
+}
+
+
+/* CALLED FROM GENERATED CODE */
+/* DIRTY HELPER (writes guest state, reads guest mem) */
+VexEmWarn amd64g_dirtyhelper_FXRSTOR ( VexGuestAMD64State* gst, HWord addr )
+{
+   Fpu_State tmp;
+   VexEmWarn warnX87 = EmWarn_NONE;
+   VexEmWarn warnXMM = EmWarn_NONE;
+   UShort*   addrS   = (UShort*)addr;
+   UChar*    addrC   = (UChar*)addr;
+   U128*     xmm     = (U128*)(addr + 160);
+   UShort    fp_tags;
+   Int       r, stno, i;
+
+   /* Restore %xmm0 .. %xmm15.  If the host is big-endian, these need
+      to be byte-swapped. */
+   vassert(host_is_little_endian());
+
+#  define COPY_U128(_dst,_src)                       \
+      do { _dst[0] = _src[0]; _dst[1] = _src[1];     \
+           _dst[2] = _src[2]; _dst[3] = _src[3]; }   \
+      while (0)
+
+   COPY_U128( gst->guest_XMM0, xmm[0] );
+   COPY_U128( gst->guest_XMM1, xmm[1] );
+   COPY_U128( gst->guest_XMM2, xmm[2] );
+   COPY_U128( gst->guest_XMM3, xmm[3] );
+   COPY_U128( gst->guest_XMM4, xmm[4] );
+   COPY_U128( gst->guest_XMM5, xmm[5] );
+   COPY_U128( gst->guest_XMM6, xmm[6] );
+   COPY_U128( gst->guest_XMM7, xmm[7] );
+   COPY_U128( gst->guest_XMM8, xmm[8] );
+   COPY_U128( gst->guest_XMM9, xmm[9] );
+   COPY_U128( gst->guest_XMM10, xmm[10] );
+   COPY_U128( gst->guest_XMM11, xmm[11] );
+   COPY_U128( gst->guest_XMM12, xmm[12] );
+   COPY_U128( gst->guest_XMM13, xmm[13] );
+   COPY_U128( gst->guest_XMM14, xmm[14] );
+   COPY_U128( gst->guest_XMM15, xmm[15] );
+
+#  undef COPY_U128
+
+   /* Copy the x87 registers out of the image, into a temporary
+      Fpu_State struct. */
+   for (i = 0; i < 14; i++) tmp.env[i] = 0;
+   for (i = 0; i < 80; i++) tmp.reg[i] = 0;
+   /* fill in tmp.reg[0..7] */
+   for (stno = 0; stno < 8; stno++) {
+      UShort* dstS = (UShort*)(&tmp.reg[10*stno]);
+      UShort* srcS = (UShort*)(&addrS[16 + 8*stno]);
+      dstS[0] = srcS[0];
+      dstS[1] = srcS[1];
+      dstS[2] = srcS[2];
+      dstS[3] = srcS[3];
+      dstS[4] = srcS[4];
+   }
+   /* fill in tmp.env[0..13] */
+   tmp.env[FP_ENV_CTRL] = addrS[0]; /* FCW: fpu control word */
+   tmp.env[FP_ENV_STAT] = addrS[1]; /* FCW: fpu status word */
+
+   fp_tags = 0;
+   for (r = 0; r < 8; r++) {
+      if (addrC[4] & (1<<r))
+         fp_tags |= (0 << (2*r)); /* EMPTY */
+      else 
+         fp_tags |= (3 << (2*r)); /* VALID -- not really precise enough. */
+   }
+   tmp.env[FP_ENV_TAG] = fp_tags;
+
+   /* Now write 'tmp' into the guest state. */
+   warnX87 = do_put_x87( True/*moveRegs*/, (UChar*)&tmp, gst );
+
+   { UInt w32 = (((UInt)addrS[12]) & 0xFFFF)
+                | ((((UInt)addrS[13]) & 0xFFFF) << 16);
+     ULong w64 = amd64g_check_ldmxcsr( (ULong)w32 );
+
+     warnXMM = (VexEmWarn)(w64 >> 32);
+
+     gst->guest_SSEROUND = w64 & 0xFFFFFFFFULL;
+   }
+
+   /* Prefer an X87 emwarn over an XMM one, if both exist. */
+   if (warnX87 != EmWarn_NONE)
+      return warnX87;
+   else
+      return warnXMM;
 }
 
 
@@ -2037,6 +2239,7 @@ void amd64g_dirtyhelper_CPUID_sse3_and_cx16 ( VexGuestAMD64State* st )
                      dtes64 monitor ds_cpl vmx smx est tm2 ssse3 cx16
                      xtpr pdcm sse4_1 sse4_2 popcnt aes lahf_lm ida
                      arat tpr_shadow vnmi flexpriority ept vpid
+                     MINUS aes (see below)
    bogomips        : 6957.57
    clflush size    : 64
    cache_alignment : 64
@@ -2060,7 +2263,10 @@ void amd64g_dirtyhelper_CPUID_sse42_and_cx16 ( VexGuestAMD64State* st )
          SET_ABCD(0x0000000b, 0x756e6547, 0x6c65746e, 0x49656e69);
          break;
       case 0x00000001:
-         SET_ABCD(0x00020652, 0x00100800, 0x0298e3ff, 0xbfebfbff);
+         // & ~(1<<25): don't claim to support AES insns.  See
+         // bug 249991.
+         SET_ABCD(0x00020652, 0x00100800, 0x0298e3ff & ~(1<<25),
+                                          0xbfebfbff);
          break;
       case 0x00000002:
          SET_ABCD(0x55035a01, 0x00f0b2e3, 0x00000000, 0x09ca212c);
@@ -2295,6 +2501,51 @@ ULong amd64g_calculate_RCL ( ULong arg,
    return wantRflags ? rflags_in : arg;
 }
 
+/* Taken from gf2x-0.9.5, released under GPLv2+ (later versions LGPLv2+)
+ * svn://scm.gforge.inria.fr/svn/gf2x/trunk/hardware/opteron/gf2x_mul1.h@25
+ */
+ULong amd64g_calculate_pclmul(ULong a, ULong b, ULong which)
+{
+    ULong hi, lo, tmp, A[16];
+
+   A[0] = 0;            A[1] = a;
+   A[2] = A[1] << 1;    A[3] = A[2] ^ a;
+   A[4] = A[2] << 1;    A[5] = A[4] ^ a;
+   A[6] = A[3] << 1;    A[7] = A[6] ^ a;
+   A[8] = A[4] << 1;    A[9] = A[8] ^ a;
+   A[10] = A[5] << 1;   A[11] = A[10] ^ a;
+   A[12] = A[6] << 1;   A[13] = A[12] ^ a;
+   A[14] = A[7] << 1;   A[15] = A[14] ^ a;
+
+   lo = (A[b >> 60] << 4) ^ A[(b >> 56) & 15];
+   hi = lo >> 56;
+   lo = (lo << 8) ^ (A[(b >> 52) & 15] << 4) ^ A[(b >> 48) & 15];
+   hi = (hi << 8) | (lo >> 56);
+   lo = (lo << 8) ^ (A[(b >> 44) & 15] << 4) ^ A[(b >> 40) & 15];
+   hi = (hi << 8) | (lo >> 56);
+   lo = (lo << 8) ^ (A[(b >> 36) & 15] << 4) ^ A[(b >> 32) & 15];
+   hi = (hi << 8) | (lo >> 56);
+   lo = (lo << 8) ^ (A[(b >> 28) & 15] << 4) ^ A[(b >> 24) & 15];
+   hi = (hi << 8) | (lo >> 56);
+   lo = (lo << 8) ^ (A[(b >> 20) & 15] << 4) ^ A[(b >> 16) & 15];
+   hi = (hi << 8) | (lo >> 56);
+   lo = (lo << 8) ^ (A[(b >> 12) & 15] << 4) ^ A[(b >> 8) & 15];
+   hi = (hi << 8) | (lo >> 56);
+   lo = (lo << 8) ^ (A[(b >> 4) & 15] << 4) ^ A[b & 15];
+
+   ULong m0 = -1;
+   m0 /= 255;
+   tmp = -((a >> 63) & 1); tmp &= ((b & (m0 * 0xfe)) >> 1); hi = hi ^ tmp;
+   tmp = -((a >> 62) & 1); tmp &= ((b & (m0 * 0xfc)) >> 2); hi = hi ^ tmp;
+   tmp = -((a >> 61) & 1); tmp &= ((b & (m0 * 0xf8)) >> 3); hi = hi ^ tmp;
+   tmp = -((a >> 60) & 1); tmp &= ((b & (m0 * 0xf0)) >> 4); hi = hi ^ tmp;
+   tmp = -((a >> 59) & 1); tmp &= ((b & (m0 * 0xe0)) >> 5); hi = hi ^ tmp;
+   tmp = -((a >> 58) & 1); tmp &= ((b & (m0 * 0xc0)) >> 6); hi = hi ^ tmp;
+   tmp = -((a >> 57) & 1); tmp &= ((b & (m0 * 0x80)) >> 7); hi = hi ^ tmp;
+
+   return which ? hi : lo;
+}
+
 
 /* CALLED FROM GENERATED CODE */
 /* DIRTY HELPER (non-referentially-transparent) */
@@ -2509,50 +2760,165 @@ ULong amd64g_calculate_sse_pmovmskb ( ULong w64hi, ULong w64lo )
    return ((rHi8 & 0xFF) << 8) | (rLo8 & 0xFF);
 }
 
+/* CALLED FROM GENERATED CODE: CLEAN HELPER */
+ULong amd64g_calc_crc32b ( ULong crcIn, ULong b )
+{
+   UInt  i;
+   ULong crc = (b & 0xFFULL) ^ crcIn;
+   for (i = 0; i < 8; i++)
+      crc = (crc >> 1) ^ ((crc & 1) ? 0x82f63b78ULL : 0);
+   return crc;
+}
+
+/* CALLED FROM GENERATED CODE: CLEAN HELPER */
+ULong amd64g_calc_crc32w ( ULong crcIn, ULong w )
+{
+   UInt  i;
+   ULong crc = (w & 0xFFFFULL) ^ crcIn;
+   for (i = 0; i < 16; i++)
+      crc = (crc >> 1) ^ ((crc & 1) ? 0x82f63b78ULL : 0);
+   return crc;
+}
+
+/* CALLED FROM GENERATED CODE: CLEAN HELPER */
+ULong amd64g_calc_crc32l ( ULong crcIn, ULong l )
+{
+   UInt i;
+   ULong crc = (l & 0xFFFFFFFFULL) ^ crcIn;
+   for (i = 0; i < 32; i++)
+      crc = (crc >> 1) ^ ((crc & 1) ? 0x82f63b78ULL : 0);
+   return crc;
+}
+
+/* CALLED FROM GENERATED CODE: CLEAN HELPER */
+ULong amd64g_calc_crc32q ( ULong crcIn, ULong q )
+{
+   ULong crc = amd64g_calc_crc32l(crcIn, q);
+   return amd64g_calc_crc32l(crc, q >> 32);
+}
+
 
 /*---------------------------------------------------------------*/
 /*--- Helpers for SSE4.2 PCMP{E,I}STR{I,M}                    ---*/
 /*---------------------------------------------------------------*/
 
-/* CALLED FROM GENERATED CODE: DIRTY HELPER(s).  (But not really,
+static UInt zmask_from_V128 ( V128* arg )
+{
+   UInt i, res = 0;
+   for (i = 0; i < 16; i++) {
+      res |=  ((arg->w8[i] == 0) ? 1 : 0) << i;
+   }
+   return res;
+}
+
+/* Helps with PCMP{I,E}STR{I,M}.
+
+   CALLED FROM GENERATED CODE: DIRTY HELPER(s).  (But not really,
    actually it could be a clean helper, but for the fact that we can't
-   pass by value 2 x V128 to a clean helper.)  Reads guest state, no
-   writes to guest state, no accesses of memory, is a pure function.
-   This relies on the property that the XMM regs are laid out
-   consecutively in the guest state, so we can index into them here.
-   Returned value (0 .. 16) is in the low 16 bits of the return value.
-   Returned bits 31:16 hold the result OSZACP value.
+   pass by value 2 x V128 to a clean helper, nor have one returned.)
+   Reads guest state, writes to guest state for the xSTRM cases, no
+   accesses of memory, is a pure function.
+
+   opc_and_imm contains (4th byte of opcode << 8) | the-imm8-byte so
+   the callee knows which I/E and I/M variant it is dealing with and
+   what the specific operation is.  4th byte of opcode is in the range
+   0x60 to 0x63:
+       istri  66 0F 3A 63
+       istrm  66 0F 3A 62
+       estri  66 0F 3A 61
+       estrm  66 0F 3A 60
+
+   gstOffL and gstOffR are the guest state offsets for the two XMM
+   register inputs.  We never have to deal with the memory case since
+   that is handled by pre-loading the relevant value into the fake
+   XMM16 register.
+
+   For ESTRx variants, edxIN and eaxIN hold the values of those two
+   registers.
+
+   In all cases, the bottom 16 bits of the result contain the new
+   OSZACP %rflags values.  For xSTRI variants, bits[31:16] of the
+   result hold the new %ecx value.  For xSTRM variants, the helper
+   writes the result directly to the guest XMM0.
+
+   Declarable side effects: in all cases, reads guest state at
+   [gstOffL, +16) and [gstOffR, +16).  For xSTRM variants, also writes
+   guest_XMM0.
+
+   Is expected to be called with opc_and_imm combinations which have
+   actually been validated, and will assert if otherwise.  The front
+   end should ensure we're only called with verified values.
 */
-ULong amd64g_dirtyhelper_ISTRI_08 ( VexGuestAMD64State* gst,
-                                    HWord gstOffL, HWord gstOffR )
+ULong amd64g_dirtyhelper_PCMPxSTRx ( 
+          VexGuestAMD64State* gst,
+          HWord opc4_and_imm,
+          HWord gstOffL, HWord gstOffR,
+          HWord edxIN, HWord eaxIN
+       )
 {
-   U128* argL = (U128*)( ((UChar*)gst) + gstOffL );
-   U128* argR = (U128*)( ((UChar*)gst) + gstOffR );
-   return (HWord) compute_ISTRI_08( argL, argR );
-}
+   HWord opc4 = (opc4_and_imm >> 8) & 0xFF;
+   HWord imm8 = opc4_and_imm & 0xFF;
+   HWord isISTRx = opc4 & 2;
+   HWord isxSTRM = (opc4 & 1) ^ 1;
+   vassert((opc4 & 0xFC) == 0x60); /* 0x60 .. 0x63 */
+   vassert((imm8 & 1) == 0); /* we support byte-size cases only */
 
-ULong amd64g_dirtyhelper_ISTRI_0C ( VexGuestAMD64State* gst,
-                                    HWord gstOffL, HWord gstOffR )
-{
-   U128* argL = (U128*)( ((UChar*)gst) + gstOffL );
-   U128* argR = (U128*)( ((UChar*)gst) + gstOffR );
-   return (HWord) compute_ISTRI_0C( argL, argR );
-}
+   // where the args are
+   V128* argL = (V128*)( ((UChar*)gst) + gstOffL );
+   V128* argR = (V128*)( ((UChar*)gst) + gstOffR );
 
-ULong amd64g_dirtyhelper_ISTRI_3A ( VexGuestAMD64State* gst,
-                                    HWord gstOffL, HWord gstOffR )
-{
-   U128* argL = (U128*)( ((UChar*)gst) + gstOffL );
-   U128* argR = (U128*)( ((UChar*)gst) + gstOffR );
-   return (HWord) compute_ISTRI_3A( argL, argR );
-}
+   /* Create the arg validity masks, either from the vectors
+      themselves or from the supplied edx/eax values. */
+   // FIXME: this is only right for the 8-bit data cases.
+   // At least that is asserted above.
+   UInt zmaskL, zmaskR;
+   if (isISTRx) {
+      zmaskL = zmask_from_V128(argL);
+      zmaskR = zmask_from_V128(argR);
+   } else {
+      Int tmp;
+      tmp = edxIN & 0xFFFFFFFF;
+      if (tmp < -16) tmp = -16;
+      if (tmp > 16)  tmp = 16;
+      if (tmp < 0)   tmp = -tmp;
+      vassert(tmp >= 0 && tmp <= 16);
+      zmaskL = (1 << tmp) & 0xFFFF;
+      tmp = eaxIN & 0xFFFFFFFF;
+      if (tmp < -16) tmp = -16;
+      if (tmp > 16)  tmp = 16;
+      if (tmp < 0)   tmp = -tmp;
+      vassert(tmp >= 0 && tmp <= 16);
+      zmaskR = (1 << tmp) & 0xFFFF;
+   }
 
-ULong amd64g_dirtyhelper_ISTRI_4A ( VexGuestAMD64State* gst,
-                                    HWord gstOffL, HWord gstOffR )
-{
-   U128* argL = (U128*)( ((UChar*)gst) + gstOffL );
-   U128* argR = (U128*)( ((UChar*)gst) + gstOffR );
-   return (HWord) compute_ISTRI_4A( argL, argR );
+   // temp spot for the resulting flags and vector.
+   V128 resV;
+   UInt resOSZACP;
+
+   // do the meyaath
+   Bool ok = compute_PCMPxSTRx ( 
+                &resV, &resOSZACP, argL, argR, 
+                zmaskL, zmaskR, imm8, (Bool)isxSTRM
+             );
+
+   // front end shouldn't pass us any imm8 variants we can't
+   // handle.  Hence:
+   vassert(ok);
+
+   // So, finally we need to get the results back to the caller.
+   // In all cases, the new OSZACP value is the lowest 16 of
+   // the return value.
+   if (isxSTRM) {
+      /* gst->guest_XMM0 = resV; */ // gcc don't like that
+      gst->guest_XMM0[0] = resV.w32[0];
+      gst->guest_XMM0[1] = resV.w32[1];
+      gst->guest_XMM0[2] = resV.w32[2];
+      gst->guest_XMM0[3] = resV.w32[3];
+      return resOSZACP & 0x8D5;
+   } else {
+      UInt newECX = resV.w32[0] & 0xFFFF;
+      return (newECX << 16) | (resOSZACP & 0x8D5);
+   }
 }
 
 

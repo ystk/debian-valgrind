@@ -1,7 +1,7 @@
 /* config.h.in.  Generated from configure.in by autoheader.  */
 
-/* Define to 1 if you're using AIX 5.1 or 5.2 or 5.3 */
-#undef AIX5_LIBC
+/* Define to 1 if you're using Bionic */
+#undef BIONIC_LIBC
 
 /* DARWIN_VERS value for Mac OS X 10.5 */
 #undef DARWIN_10_5
@@ -33,6 +33,12 @@
 /* Define to 1 if you're using glibc 2.12.x */
 #undef GLIBC_2_12
 
+/* Define to 1 if you're using glibc 2.13.x */
+#undef GLIBC_2_13
+
+/* Define to 1 if you're using glibc 2.14.x */
+#undef GLIBC_2_14
+
 /* Define to 1 if you're using glibc 2.2.x */
 #undef GLIBC_2_2
 
@@ -57,14 +63,22 @@
 /* Define to 1 if you're using glibc 2.9.x */
 #undef GLIBC_2_9
 
+/* Define to 1 if gcc/as can do Altivec. */
+#undef HAS_ALTIVEC
+
 /* Define to 1 if you have the <asm/unistd.h> header file. */
 #undef HAVE_ASM_UNISTD_H
 
 /* Define to 1 if as supports mtocrf/mfocrf. */
 #undef HAVE_AS_PPC_MFTOCRF
 
-/* Define to 1 if gcc supports __sync_bool_compare_and_swap() a.o. */
+/* Define to 1 if gcc supports __sync_bool_compare_and_swap() and
+   __sync_add_and_fetch() */
 #undef HAVE_BUILTIN_ATOMIC
+
+/* Define to 1 if g++ supports __sync_bool_compare_and_swap() and
+   __sync_add_and_fetch() */
+#undef HAVE_BUILTIN_ATOMIC_CXX
 
 /* Define to 1 if you have the `clock_gettime' function. */
 #undef HAVE_CLOCK_GETTIME
@@ -87,9 +101,6 @@
 /* Define to 1 if you have the `eventfd_read' function. */
 #undef HAVE_EVENTFD_READ
 
-/* Define to 1 if you have the `floor' function. */
-#undef HAVE_FLOOR
-
 /* Define to 1 if you have the `getpagesize' function. */
 #undef HAVE_GETPAGESIZE
 
@@ -98,6 +109,9 @@
 
 /* Define to 1 if you have the `klogctl' function. */
 #undef HAVE_KLOGCTL
+
+/* Define to 1 if you have the `pthread' library (-lpthread). */
+#undef HAVE_LIBPTHREAD
 
 /* Define to 1 if you have the `rt' library (-lrt). */
 #undef HAVE_LIBRT
@@ -160,6 +174,9 @@
    constant. */
 #undef HAVE_PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP
 
+/* Define to 1 if you have the `pthread_rwlock_t' type. */
+#undef HAVE_PTHREAD_RWLOCK_T
+
 /* Define to 1 if you have the `pthread_rwlock_timedrdlock' function. */
 #undef HAVE_PTHREAD_RWLOCK_TIMEDRDLOCK
 
@@ -171,13 +188,6 @@
 
 /* Define to 1 if you have the `pthread_yield' function. */
 #undef HAVE_PTHREAD_YIELD
-
-/* Define to 1 if the installed version of Qt4 provides QAtomicInt. */
-#undef HAVE_QTCORE_QATOMICINT
-
-/* Define to 1 if the installed version of Qt4 provides QMutex::tryLock(int).
-   */
-#undef HAVE_QTCORE_QMUTEX_TRYLOCK_INT
 
 /* Define to 1 if you have the `readlinkat' function. */
 #undef HAVE_READLINKAT
@@ -257,14 +267,14 @@
 /* Define to 1 if you have the <sys/types.h> header file. */
 #undef HAVE_SYS_TYPES_H
 
-/* Define to 1 if you have the `timerfd' function. */
-#undef HAVE_TIMERFD
-
 /* can use __thread to define thread-local variables */
 #undef HAVE_TLS
 
 /* Define to 1 if you have the <unistd.h> header file. */
 #undef HAVE_UNISTD_H
+
+/* Define to 1 if you have a usable <linux/futex.h> header file. */
+#undef HAVE_USABLE_LINUX_FUTEX_H
 
 /* Define to 1 if you have the `utimensat' function. */
 #undef HAVE_UTIMENSAT
@@ -272,7 +282,7 @@
 /* Define to 1 if you're using Linux 2.4.x */
 #undef KERNEL_2_4
 
-/* Define to 1 if you're using Linux 2.6.x */
+/* Define to 1 if you're using Linux 2.6.x or Linux 3.x */
 #undef KERNEL_2_6
 
 /* Define to 1 if your C compiler doesn't accept -c and -o together. */
@@ -299,9 +309,6 @@
 /* Define to the version of this package. */
 #undef PACKAGE_VERSION
 
-/* Define as the return type of signal handlers (`int' or `void'). */
-#undef RETSIGTYPE
-
 /* Define to 1 if you have the ANSI C header files. */
 #undef STDC_HEADERS
 
@@ -310,6 +317,9 @@
 
 /* Version number of package */
 #undef VERSION
+
+/* Temporary files directory */
+#undef VG_TMPDIR
 
 /* Define to `int' if <sys/types.h> doesn't define. */
 #undef gid_t

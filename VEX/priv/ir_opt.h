@@ -7,7 +7,7 @@
    This file is part of Valgrind, a dynamic binary instrumentation
    framework.
 
-   Copyright (C) 2004-2010 OpenWorks LLP
+   Copyright (C) 2004-2011 OpenWorks LLP
       info@open-works.net
 
    This program is free software; you can redistribute it and/or
@@ -43,10 +43,13 @@
 /* Top level optimiser entry point.  Returns a new BB.  Operates
    under the control of the global "vex_control" struct. */
 extern 
-IRSB* do_iropt_BB ( IRSB* bb,
-                    IRExpr* (*specHelper) (HChar*, IRExpr**),
-                    Bool (*preciseMemExnsFn)(Int,Int),
-                    Addr64 guest_addr );
+IRSB* do_iropt_BB(
+         IRSB* bb,
+         IRExpr* (*specHelper) (HChar*, IRExpr**, IRStmt**, Int),
+         Bool (*preciseMemExnsFn)(Int,Int),
+         Addr64 guest_addr,
+         VexArch guest_arch
+      );
 
 /* Do a constant folding/propagation pass. */
 extern
