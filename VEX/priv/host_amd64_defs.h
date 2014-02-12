@@ -7,7 +7,7 @@
    This file is part of Valgrind, a dynamic binary instrumentation
    framework.
 
-   Copyright (C) 2004-2010 OpenWorks LLP
+   Copyright (C) 2004-2011 OpenWorks LLP
       info@open-works.net
 
    This program is free software; you can redistribute it and/or
@@ -189,7 +189,8 @@ extern AMD64RMI* AMD64RMI_Imm ( UInt );
 extern AMD64RMI* AMD64RMI_Reg ( HReg );
 extern AMD64RMI* AMD64RMI_Mem ( AMD64AMode* );
 
-extern void ppAMD64RMI ( AMD64RMI* );
+extern void ppAMD64RMI      ( AMD64RMI* );
+extern void ppAMD64RMI_lo32 ( AMD64RMI* );
 
 
 /* --------- Operand, which can be reg or immediate only. --------- */
@@ -359,6 +360,7 @@ typedef
       Ain_Test64,      /* 64-bit test (AND, set flags, discard result) */
       Ain_Unary64,     /* 64-bit not and neg */
       Ain_Lea64,       /* 64-bit compute EA into a reg */
+      Ain_Alu32R,      /* 32-bit add/sub/and/or/xor/cmp, dst=REG (a la Alu64R) */
       Ain_MulL,        /* widening multiply */
       Ain_Div,         /* div and mod */
 //..       Xin_Sh3232,    /* shldl or shrdl */
@@ -366,7 +368,7 @@ typedef
       Ain_Call,        /* call to address in register */
       Ain_Goto,        /* conditional/unconditional jmp to dst */
       Ain_CMov64,      /* conditional move */
-      Ain_MovZLQ,      /* reg-reg move, zeroing out top half */
+      Ain_MovxLQ,      /* reg-reg move, zx-ing/sx-ing top half */
       Ain_LoadEX,      /* mov{s,z}{b,w,l}q from mem to reg */
       Ain_Store,       /* store 32/16/8 bit value in memory */
       Ain_Set64,       /* convert condition code to 64-bit value */
@@ -449,6 +451,12 @@ typedef
             AMD64AMode* am;
             HReg        dst;
          } Lea64;
+         /* 32-bit add/sub/and/or/xor/cmp, dst=REG (a la Alu64R) */
+         struct {
+            AMD64AluOp op;
+            AMD64RMI*  src;
+            HReg       dst;
+         } Alu32R;
          /* 64 x 64 -> 128 bit widening multiply: RDX:RAX = RAX *s/u
             r/m64 */
          struct {
@@ -493,11 +501,12 @@ typedef
             AMD64RM*      src;
             HReg          dst;
          } CMov64;
-         /* reg-reg move, zeroing out top half */
+         /* reg-reg move, sx-ing/zx-ing top half */
          struct {
+            Bool syned;
             HReg src;
             HReg dst;
-         } MovZLQ;
+         } MovxLQ;
          /* Sign/Zero extending loads.  Dst size is always 64 bits. */
          struct {
             UChar       szSmall; /* only 1, 2 or 4 */
@@ -675,6 +684,7 @@ extern AMD64Instr* AMD64Instr_Alu64R     ( AMD64AluOp, AMD64RMI*, HReg );
 extern AMD64Instr* AMD64Instr_Alu64M     ( AMD64AluOp, AMD64RI*,  AMD64AMode* );
 extern AMD64Instr* AMD64Instr_Unary64    ( AMD64UnaryOp op, HReg dst );
 extern AMD64Instr* AMD64Instr_Lea64      ( AMD64AMode* am, HReg dst );
+extern AMD64Instr* AMD64Instr_Alu32R     ( AMD64AluOp, AMD64RMI*, HReg );
 extern AMD64Instr* AMD64Instr_Sh64       ( AMD64ShiftOp, UInt, HReg );
 extern AMD64Instr* AMD64Instr_Test64     ( UInt imm32, HReg dst );
 extern AMD64Instr* AMD64Instr_MulL       ( Bool syned, AMD64RM* );
@@ -684,7 +694,7 @@ extern AMD64Instr* AMD64Instr_Push       ( AMD64RMI* );
 extern AMD64Instr* AMD64Instr_Call       ( AMD64CondCode, Addr64, Int );
 extern AMD64Instr* AMD64Instr_Goto       ( IRJumpKind, AMD64CondCode cond, AMD64RI* dst );
 extern AMD64Instr* AMD64Instr_CMov64     ( AMD64CondCode, AMD64RM* src, HReg dst );
-extern AMD64Instr* AMD64Instr_MovZLQ     ( HReg src, HReg dst );
+extern AMD64Instr* AMD64Instr_MovxLQ     ( Bool syned, HReg src, HReg dst );
 extern AMD64Instr* AMD64Instr_LoadEX     ( UChar szSmall, Bool syned,
                                            AMD64AMode* src, HReg dst );
 extern AMD64Instr* AMD64Instr_Store      ( UChar sz, HReg src, AMD64AMode* dst );
@@ -733,7 +743,9 @@ extern void         getRegUsage_AMD64Instr ( HRegUsage*, AMD64Instr*, Bool );
 extern void         mapRegs_AMD64Instr     ( HRegRemap*, AMD64Instr*, Bool );
 extern Bool         isMove_AMD64Instr      ( AMD64Instr*, HReg*, HReg* );
 extern Int          emit_AMD64Instr        ( UChar* buf, Int nbuf, AMD64Instr*, 
-                                             Bool, void* dispatch );
+                                             Bool,
+                                             void* dispatch_unassisted,
+                                             void* dispatch_assisted );
 
 extern void genSpill_AMD64  ( /*OUT*/HInstr** i1, /*OUT*/HInstr** i2,
                               HReg rreg, Int offset, Bool );

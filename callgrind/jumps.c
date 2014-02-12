@@ -6,7 +6,7 @@
 /*
    This file is part of Callgrind, a Valgrind tool for call tracing.
 
-   Copyright (C) 2002-2010, Josef Weidendorfer (Josef.Weidendorfer@gmx.de)
+   Copyright (C) 2002-2011, Josef Weidendorfer (Josef.Weidendorfer@gmx.de)
 
    This program is free software; you can redistribute it and/or
    modify it under the terms of the GNU General Public License as
@@ -160,6 +160,8 @@ static jCC* new_jcc(BBCC* from, UInt jmp, BBCC* to)
     * This list is only used at dumping time */
 
    if (from) {
+       /* Prohibit corruption by array overrun */
+       CLG_ASSERT((0 <= jmp) && (jmp <= from->bb->cjmp_count));
        jcc->next_from = from->jmp[jmp].jcc_list;
        from->jmp[jmp].jcc_list = jcc;
    }

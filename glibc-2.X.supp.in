@@ -168,9 +168,9 @@
    Memcheck:Param
    socketcall.sendto(msg)
    fun:__sendto_nocancel
-   obj:/*libc-@GLIBC_VERSION@.so
-   obj:/*libc-@GLIBC_VERSION@.so
-   obj:/*libc-@GLIBC_VERSION@.so
+   obj:/*libc-@GLIBC_VERSION@*.so
+   obj:/*libc-@GLIBC_VERSION@*.so
+   obj:/*libc-@GLIBC_VERSION@*.so
 }
 {
    glibc24-64bit-padding-1c
@@ -180,7 +180,7 @@
    fun:__nscd_get_map_ref
    fun:nscd_get*_r
    fun:*nscd*
-   obj:/*libc-@GLIBC_VERSION@.so
+   obj:/*libc-@GLIBC_VERSION@*.so
 }
 
 
@@ -199,18 +199,18 @@
    Memcheck:Param
    socketcall.sendto(msg)
    fun:send
-   obj:/*libc-@GLIBC_VERSION@.so
-   obj:/*libc-@GLIBC_VERSION@.so
-   obj:/*libc-@GLIBC_VERSION@.so
+   obj:/*libc-@GLIBC_VERSION@*.so
+   obj:/*libc-@GLIBC_VERSION@*.so
+   obj:/*libc-@GLIBC_VERSION@*.so
 }
 {
    X11-64bit-padding-4b
    Memcheck:Param
    socketcall.send(msg)
    fun:send
-   obj:/*libc-@GLIBC_VERSION@.so
-   obj:/*libc-@GLIBC_VERSION@.so
-   obj:/*libc-@GLIBC_VERSION@.so
+   obj:/*libc-@GLIBC_VERSION@*.so
+   obj:/*libc-@GLIBC_VERSION@*.so
+   obj:/*libc-@GLIBC_VERSION@*.so
 }
 
 ##----------------------------------------------------------------------##
@@ -227,4 +227,12 @@
    write(buf)
    obj:/lib/libpthread-0.10.so
    fun:pthread_create
+}
+
+##----------------------------------------------------------------------##
+# Ubuntu 10.04 on ARM (Thumb).  Not sure why this is necessary.
+{
+   U1004-ARM-_dl_relocate_object
+   Memcheck:Cond
+   fun:_dl_relocate_object
 }

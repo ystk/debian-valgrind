@@ -27,4 +27,3 @@ export GLIBCXX_FORCE_NEW=1
 
 # Use 'exec' to avoid having another shell process hanging around.
 exec $0.bin "$@"
-
