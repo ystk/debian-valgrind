@@ -6,7 +6,7 @@
    This file is part of Valgrind, a dynamic binary instrumentation
    framework.
 
-   Copyright (C) 2000-2011 Julian Seward
+   Copyright (C) 2000-2013 Julian Seward
       jseward@acm.org
 
    This program is free software; you can redistribute it and/or
@@ -29,6 +29,8 @@
 
 #ifndef __PUB_TOOL_EXECONTEXT_H
 #define __PUB_TOOL_EXECONTEXT_H
+
+#include "pub_tool_basics.h"   // ThreadID
 
 // It's an abstract type.
 typedef
@@ -67,7 +69,7 @@ ExeContext* VG_(record_ExeContext) ( ThreadId tid, Word first_ip_delta );
 // might cause a segfault.  In this case we can at least safely
 // produce a one-element stack trace, which is better than nothing.
 extern
-ExeContext* VG_(record_depth_1_ExeContext)( ThreadId tid );
+ExeContext* VG_(record_depth_1_ExeContext)(ThreadId tid, Word first_ip_delta);
 
 // Apply a function to every element in the ExeContext.  The parameter 'n'
 // gives the index of the passed ip.  Doesn't go below main() unless
@@ -109,6 +111,11 @@ static inline Bool VG_(is_plausible_ECU)( UInt ecu ) {
 
 // Make an ExeContext containing exactly the specified stack frames.
 ExeContext* VG_(make_ExeContext_from_StackTrace)( Addr* ips, UInt n_ips );
+
+// Returns the "null" exe context. The null execontext is an artificial
+// exe context, with a stack trace made of one Addr (the NULL address).
+extern 
+ExeContext* VG_(null_ExeContext) (void);
 
 #endif   // __PUB_TOOL_EXECONTEXT_H
 

@@ -497,7 +497,7 @@ behavior of the DRD tool itself:</para>
         Print stack usage at thread exit time. When a program creates a large
         number of threads it becomes important to limit the amount of virtual
         memory allocated for thread stacks. This option makes it possible to
-        observe how much stack memory has been used by each thread of the the
+        observe how much stack memory has been used by each thread of the
         client program. Note: the DRD tool itself allocates some temporary
         data on the client thread stack. The space necessary for this
         temporary data must be allocated by the client program when it
@@ -524,6 +524,18 @@ client program:
       <para>
         Trace all load and store activity for the specified
         address. This option may be specified more than once.
+      </para>
+    </listitem>
+  </varlistentry>
+  <varlistentry>
+    <term>
+      <option><![CDATA[--ptrace-addr=<address> [default: none]]]></option>
+    </term>
+    <listitem>
+      <para>
+        Trace all load and store activity for the specified address and keep
+        doing that even after the memory at that address has been freed and
+        reallocated.
       </para>
     </listitem>
   </varlistentry>
@@ -1002,6 +1014,14 @@ available macros and client requests are:
       race on a specified variable, and it's not immediately clear which
       source code statements triggered the conflicting accesses, it can be
       very helpful to trace all activity on the offending memory location.
+    </para>
+  </listitem>
+  <listitem>
+    <para>
+      The macro <literal>DRD_STOP_TRACING_VAR(x)</literal>. Stop tracing load
+      and store activity for the address range starting
+      at <literal>&amp;x</literal> and occupying <literal>sizeof(x)</literal>
+      bytes.
     </para>
   </listitem>
   <listitem>
@@ -1723,12 +1743,6 @@ example.
       a know <literal>libstdc++</literal> issue -- see also GCC bug
       <ulink url="http://gcc.gnu.org/bugzilla/show_bug.cgi?id=40518">40518</ulink>
       for more information.
-    </para>
-  </listitem>
-  <listitem>
-    <para>
-      When address tracing is enabled, no information on atomic stores
-      will be displayed.
     </para>
   </listitem>
   <listitem>

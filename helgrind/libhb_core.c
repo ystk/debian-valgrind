@@ -9,7 +9,7 @@
    This file is part of LibHB, a library for implementing and checking
    the happens-before relationship in concurrent programs.
 
-   Copyright (C) 2008-2011 OpenWorks Ltd
+   Copyright (C) 2008-2013 OpenWorks Ltd
       info@open-works.co.uk
 
    This program is free software; you can redistribute it and/or
@@ -31,6 +31,7 @@
 */
 
 #include "pub_tool_basics.h"
+#include "pub_tool_poolalloc.h"
 #include "pub_tool_libcassert.h"
 #include "pub_tool_libcbase.h"
 #include "pub_tool_libcprint.h"
@@ -1795,7 +1796,7 @@ __attribute__((noreturn))
 static void scalarts_limitations_fail_NORETURN ( Bool due_to_nThrs )
 {
    if (due_to_nThrs) {
-      HChar* s =
+      const HChar* s =
          "\n"
          "Helgrind: cannot continue, run aborted: too many threads.\n"
          "Sorry.  Helgrind can only handle programs that create\n"
@@ -1803,7 +1804,7 @@ static void scalarts_limitations_fail_NORETURN ( Bool due_to_nThrs )
          "\n";
       VG_(umsg)(s, (ULong)(ThrID_MAX_VALID - 1024));
    } else {
-      HChar* s =
+      const HChar* s =
          "\n"
          "Helgrind: cannot continue, run aborted: too many\n"
          "synchronisation events.  Sorry. Helgrind can only handle\n"
@@ -1831,9 +1832,9 @@ static void scalarts_limitations_fail_NORETURN ( Bool due_to_nThrs )
 static XArray* /* of ThrID */ verydead_thread_table = NULL;
 
 /* Arbitrary total ordering on ThrIDs. */
-static Int cmp__ThrID ( void* v1, void* v2 ) {
-   ThrID id1 = *(ThrID*)v1;
-   ThrID id2 = *(ThrID*)v2;
+static Int cmp__ThrID ( const void* v1, const void* v2 ) {
+   ThrID id1 = *(const ThrID*)v1;
+   ThrID id2 = *(const ThrID*)v2;
    if (id1 < id2) return -1;
    if (id1 > id2) return 1;
    return 0;
@@ -1865,17 +1866,17 @@ typedef
    VTS;
 
 /* Allocate a VTS capable of storing 'sizeTS' entries. */
-static VTS* VTS__new ( HChar* who, UInt sizeTS );
+static VTS* VTS__new ( const HChar* who, UInt sizeTS );
 
 /* Make a clone of 'vts', sizing the new array to exactly match the
    number of ScalarTSs present. */
-static VTS* VTS__clone ( HChar* who, VTS* vts );
+static VTS* VTS__clone ( const HChar* who, VTS* vts );
 
 /* Make a clone of 'vts' with the thrids in 'thrids' removed.  The new
    array is sized exactly to hold the number of required elements.
    'thridsToDel' is an array of ThrIDs to be omitted in the clone, and
    must be in strictly increasing order. */
-static VTS* VTS__subtract ( HChar* who, VTS* vts, XArray* thridsToDel );
+static VTS* VTS__subtract ( const HChar* who, VTS* vts, XArray* thridsToDel );
 
 /* Delete this VTS in its entirety. */
 static void VTS__delete ( VTS* vts );
@@ -1934,7 +1935,6 @@ static Bool is_sane_VTS ( VTS* vts )
    UWord     i, n;
    ScalarTS  *st1, *st2;
    if (!vts) return False;
-   if (!vts->ts) return False;
    if (vts->usedTS > vts->sizeTS) return False;
    n = vts->usedTS;
    if (n == 1) {
@@ -1959,7 +1959,7 @@ static Bool is_sane_VTS ( VTS* vts )
 
 /* Create a new, empty VTS.
 */
-static VTS* VTS__new ( HChar* who, UInt sizeTS )
+static VTS* VTS__new ( const HChar* who, UInt sizeTS )
 {
    VTS* vts = HG_(zalloc)(who, sizeof(VTS) + (sizeTS+1) * sizeof(ScalarTS));
    tl_assert(vts->usedTS == 0);
@@ -1970,7 +1970,7 @@ static VTS* VTS__new ( HChar* who, UInt sizeTS )
 
 /* Clone this VTS.
 */
-static VTS* VTS__clone ( HChar* who, VTS* vts )
+static VTS* VTS__clone ( const HChar* who, VTS* vts )
 {
    tl_assert(vts);
    tl_assert( *(ULong*)(&vts->ts[vts->sizeTS]) == 0x0ddC0ffeeBadF00dULL);
@@ -1992,7 +1992,7 @@ static VTS* VTS__clone ( HChar* who, VTS* vts )
    must be in strictly increasing order.  We could obviously do this
    much more efficiently (in linear time) if necessary.
 */
-static VTS* VTS__subtract ( HChar* who, VTS* vts, XArray* thridsToDel )
+static VTS* VTS__subtract ( const HChar* who, VTS* vts, XArray* thridsToDel )
 {
    UInt i, j;
    tl_assert(vts);
@@ -2671,7 +2671,7 @@ static VtsID vts_tab__find__or__clone_and_add ( VTS* cand )
 }
 
 
-static void show_vts_stats ( HChar* caller )
+static void show_vts_stats ( const HChar* caller )
 {
    UWord nSet, nTab, nLive;
    ULong totrc;
@@ -3332,7 +3332,7 @@ static Thr* VtsID__findFirst_notLEQ ( VtsID vi1, VtsID vi2 )
    fast way to do this is simply to stuff in tags which we know are
    not going to match anything, since they're not aligned to the start
    of a line. */
-static void Filter__clear ( Filter* fi, HChar* who )
+static void Filter__clear ( Filter* fi, const HChar* who )
 {
    UWord i;
    if (0) VG_(printf)("  Filter__clear(%p, %s)\n", fi, who);
@@ -3744,7 +3744,8 @@ static void note_local_Kw_n_stack_for ( Thr* thr )
       VG_(pp_ExeContext)(pair.ec);
 }
 
-static Int cmp__ULong_n_EC__by_ULong ( ULong_n_EC* pair1, ULong_n_EC* pair2 )
+static Int cmp__ULong_n_EC__by_ULong ( const ULong_n_EC* pair1,
+                                       const ULong_n_EC* pair2 )
 {
    if (pair1->ull < pair2->ull) return -1;
    if (pair1->ull > pair2->ull) return 1;
@@ -3814,108 +3815,6 @@ static void SVal__rcdec ( SVal s ) {
 
 /////////////////////////////////////////////////////////
 //                                                     //
-// A simple group (memory) allocator                   //
-//                                                     //
-/////////////////////////////////////////////////////////
-
-//////////////// BEGIN general group allocator
-typedef
-   struct {
-      UWord   elemSzB;        /* element size */
-      UWord   nPerGroup;      /* # elems per group */
-      void*   (*alloc)(HChar*, SizeT); /* group allocator */
-      HChar*  cc; /* group allocator's cc */
-      void    (*free)(void*); /* group allocator's free-er (unused) */
-      /* XArray of void* (pointers to groups).  The groups themselves.
-         Each element is a pointer to a block of size (elemSzB *
-         nPerGroup) bytes. */
-      XArray* groups;
-      /* next free element.  Is a pointer to an element in one of the
-         groups pointed to by .groups. */
-      void* nextFree;
-   }
-   GroupAlloc;
-
-static void init_GroupAlloc ( /*MOD*/GroupAlloc* ga,
-                              UWord  elemSzB,
-                              UWord  nPerGroup,
-                              void*  (*alloc)(HChar*, SizeT),
-                              HChar* cc,
-                              void   (*free)(void*) )
-{
-   tl_assert(0 == (elemSzB % sizeof(UWord)));
-   tl_assert(elemSzB >= sizeof(UWord));
-   tl_assert(nPerGroup >= 100); /* let's say */
-   tl_assert(alloc);
-   tl_assert(cc);
-   tl_assert(free);
-   tl_assert(ga);
-   VG_(memset)(ga, 0, sizeof(*ga));
-   ga->elemSzB   = elemSzB;
-   ga->nPerGroup = nPerGroup;
-   ga->groups    = NULL;
-   ga->alloc     = alloc;
-   ga->cc        = cc;
-   ga->free      = free;
-   ga->groups    = VG_(newXA)( alloc, cc, free, sizeof(void*) );
-   ga->nextFree  = NULL;
-   tl_assert(ga->groups);
-}
-
-/* The freelist is empty.  Allocate a new group and put all the new
-   elements in it onto the freelist. */
-__attribute__((noinline))
-static void gal_add_new_group ( GroupAlloc* ga ) 
-{
-   Word   i;
-   UWord* group;
-   tl_assert(ga);
-   tl_assert(ga->nextFree == NULL);
-   group = ga->alloc( ga->cc, ga->elemSzB * ga->nPerGroup );
-   tl_assert(group);
-   /* extend the freelist through the new group.  Place the freelist
-      pointer in the first word of each element.  That's why the
-      element size must be at least one word. */
-   for (i = ga->nPerGroup-1; i >= 0; i--) {
-      UChar* elemC = ((UChar*)group) + i * ga->elemSzB;
-      UWord* elem  = (UWord*)elemC;
-      tl_assert(0 == (((UWord)elem) % sizeof(UWord)));
-      *elem = (UWord)ga->nextFree;
-      ga->nextFree = elem;
-   }
-   /* and add to our collection of groups */
-   VG_(addToXA)( ga->groups, &group );
-}
-
-inline static void* gal_Alloc ( GroupAlloc* ga )
-{
-   UWord* elem;
-   if (UNLIKELY(ga->nextFree == NULL)) {
-      gal_add_new_group(ga);
-   }
-   elem = ga->nextFree;
-   ga->nextFree = (void*)*elem;
-   *elem = 0; /* unnecessary, but just to be on the safe side */
-   return elem;
-}
-
-inline static void* gal_Alloc_w_size_check ( GroupAlloc* ga, SizeT n )
-{
-   tl_assert(n == ga->elemSzB);
-   return gal_Alloc( ga );
-}
-
-inline static void gal_Free ( GroupAlloc* ga, void* p )
-{
-   UWord* elem = (UWord*)p;
-   *elem = (UWord)ga->nextFree;
-   ga->nextFree = elem;
-}
-//////////////// END general group allocator
-
-
-/////////////////////////////////////////////////////////
-//                                                     //
 // Change-event map2                                   //
 //                                                     //
 /////////////////////////////////////////////////////////
@@ -3962,7 +3861,7 @@ inline static void gal_Free ( GroupAlloc* ga, void* p )
    Investigations also suggest this is very workload and scheduling
    sensitive.  Therefore a dynamic sizing would be better.
 
-   However, dynamic sizing would defeat the use of a GroupAllocator
+   However, dynamic sizing would defeat the use of a PoolAllocator
    for OldRef structures.  And that's important for performance.  So
    it's not straightforward to do.
 */
@@ -4039,18 +3938,18 @@ static void ctxt__rcinc ( RCEC* ec )
 }
 
 
-//////////// BEGIN RCEC group allocator
-static GroupAlloc rcec_group_allocator;
+//////////// BEGIN RCEC pool allocator
+static PoolAlloc* rcec_pool_allocator;
 
 static RCEC* alloc_RCEC ( void ) {
-   return gal_Alloc ( &rcec_group_allocator );
+   return VG_(allocEltPA) ( rcec_pool_allocator );
 }
 
 static void free_RCEC ( RCEC* rcec ) {
    tl_assert(rcec->magic == RCEC_MAGIC);
-   gal_Free( &rcec_group_allocator, rcec );
+   VG_(freeEltPA)( rcec_pool_allocator, rcec );
 }
-//////////// END RCEC group allocator
+//////////// END RCEC pool allocator
 
 
 /* Find 'ec' in the RCEC list whose head pointer lives at 'headp' and
@@ -4158,6 +4057,7 @@ static RCEC* get_RCEC ( Thr* thr )
    example.magic = RCEC_MAGIC;
    example.rc = 0;
    example.rcX = 0;
+   example.next = NULL;
    main_get_stacktrace( thr, &example.frames[0], N_FRAMES );
    hash = 0;
    for (i = 0; i < N_FRAMES; i++) {
@@ -4203,18 +4103,18 @@ typedef
    OldRef;
 
 
-//////////// BEGIN OldRef group allocator
-static GroupAlloc oldref_group_allocator;
+//////////// BEGIN OldRef pool allocator
+static PoolAlloc* oldref_pool_allocator;
 
 static OldRef* alloc_OldRef ( void ) {
-   return gal_Alloc ( &oldref_group_allocator );
+   return VG_(allocEltPA) ( oldref_pool_allocator );
 }
 
 static void free_OldRef ( OldRef* r ) {
    tl_assert(r->magic == OldRef_MAGIC);
-   gal_Free( &oldref_group_allocator, r );
+   VG_(freeEltPA)( oldref_pool_allocator, r );
 }
-//////////// END OldRef group allocator
+//////////// END OldRef pool allocator
 
 
 static SparseWA* oldrefTree     = NULL; /* SparseWA* OldRef* */
@@ -4499,13 +4399,14 @@ static void event_map_init ( void )
 {
    Word i;
 
-   /* Context (RCEC) group allocator */
-   init_GroupAlloc ( &rcec_group_allocator,
-                     sizeof(RCEC),
-                     1000 /* RCECs per group */,
-                     HG_(zalloc),
-                     "libhb.event_map_init.1 (RCEC groups)",
-                     HG_(free) );
+   /* Context (RCEC) pool allocator */
+   rcec_pool_allocator = VG_(newPA) (
+                             sizeof(RCEC),
+                             1000 /* RCECs per pool */,
+                             HG_(zalloc),
+                             "libhb.event_map_init.1 (RCEC pools)",
+                             HG_(free)
+                          );
 
    /* Context table */
    tl_assert(!contextTab);
@@ -4515,13 +4416,14 @@ static void event_map_init ( void )
    for (i = 0; i < N_RCEC_TAB; i++)
       contextTab[i] = NULL;
 
-   /* Oldref group allocator */
-   init_GroupAlloc ( &oldref_group_allocator,
-                     sizeof(OldRef),
-                     1000 /* OldRefs per group */,
-                     HG_(zalloc),
-                     "libhb.event_map_init.3 (OldRef groups)",
-                     HG_(free) );
+   /* Oldref pool allocator */
+   oldref_pool_allocator = VG_(newPA)(
+                               sizeof(OldRef),
+                               1000 /* OldRefs per pool */,
+                               HG_(zalloc),
+                               "libhb.event_map_init.3 (OldRef pools)",
+                               HG_(free)
+                            );
 
    /* Oldref tree */
    tl_assert(!oldrefTree);
@@ -4996,7 +4898,7 @@ static void record_race_info ( Thr* acc_thr,
       found = VG_(lookupXA_UNSAFE)(
                  confThr->local_Kws_n_stacks,
                  &key, &firstIx, &lastIx,
-                 (Int(*)(void*,void*))cmp__ULong_n_EC__by_ULong
+                 (XACmpFn_t)cmp__ULong_n_EC__by_ULong
               );
       if (0) VG_(printf)("record_race_info %u %u %u  confThr %p "
                          "confTym %llu found %d (%lu,%lu)\n", 
@@ -6146,7 +6048,7 @@ static void SO__Dealloc ( SO* so )
 //                                                     //
 /////////////////////////////////////////////////////////
 
-static void show_thread_state ( HChar* str, Thr* t ) 
+static void show_thread_state ( const HChar* str, Thr* t ) 
 {
    if (1) return;
    if (t->viR == t->viW) {
@@ -6590,7 +6492,8 @@ static inline Bool TRACEME(Addr a, SizeT szB) {
    if (XXX2 && a <= XXX2 && XXX2 <= a+szB) return True;
    return False;
 }
-static void trace ( Thr* thr, Addr a, SizeT szB, HChar* s ) {
+static void trace ( Thr* thr, Addr a, SizeT szB, const HChar* s ) 
+{
   SVal sv = zsm_sread08(a);
   VG_(printf)("thr %p (%#lx,%lu) %s: 0x%016llx ", thr,a,szB,s,sv);
   show_thread_state("", thr);

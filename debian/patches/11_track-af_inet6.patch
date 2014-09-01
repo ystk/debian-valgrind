@@ -1,0 +1,138 @@
+Description: Track AF_INET6 sockets too
+Origin: upstream, https://bugs.kde.org/show_bug.cgi?id=175819
+Bug-Debian: http://bugs.debian.org/733119
+Forwarded: not-needed
+Author: Roger Light
+Last-Update: 2013-12-26
+
+--- a/coregrind/m_syswrap/syswrap-generic.c
++++ b/coregrind/m_syswrap/syswrap-generic.c
+@@ -639,6 +639,97 @@
+    return name;
+ }
+ 
++static
++Char tohex(Char hexdigit)
++{
++   return hexdigit>9 ? hexdigit+'a'-10 : hexdigit+'0';
++}
++
++static
++Int fmt_xlong(Char* s, unsigned int i)
++{
++   Char* bak = s;
++   *s = tohex((i>>12)&0xf); if (s!=bak || *s!='0') ++s;
++   *s = tohex((i>>8)&0xf); if (s!=bak || *s!='0') ++s;
++   *s = tohex((i>>4)&0xf); if (s!=bak || *s!='0') ++s;
++   *s = tohex(i&0xf);
++   return s-bak+1;
++}
++
++static const unsigned char V4mappedprefix[12]={0,0,0,0,0,0,0,0,0,0,0xff,0xff};
++
++static
++UInt fmt_ip6(Char *s, const Char ip[16])
++{
++   unsigned int len;
++   unsigned int i;
++   unsigned int temp;
++   unsigned int compressing;
++   unsigned int compressed;
++   int j;
++
++   len = 0; compressing = 0; compressed = 0;
++   for (j=0; j<16; j+=2) {
++      if (j==12 && !VG_(memcmp)(ip, V4mappedprefix, 12)) {
++         struct vki_in_addr *sin_addr = (struct vki_in_addr *)(ip+12);
++         UInt addr = VG_(ntohl)(sin_addr->s_addr);
++         if (addr == 0) {
++            VG_(sprintf)(s, "<unbound>");
++         } else {
++            VG_(sprintf)(s, "%u.%u.%u.%u",
++                        (addr>>24) & 0xFF, (addr>>16) & 0xFF,
++                        (addr>>8) & 0xFF, addr & 0xFF);
++         }
++         temp=VG_(strlen)(s);
++         return len+temp;
++      }
++      temp = ((unsigned long) (unsigned char) ip[j] << 8) +
++              (unsigned long) (unsigned char) ip[j+1];
++      if (temp == 0 && !compressed) {
++         if (!compressing) {
++            compressing=1;
++            if (j==0) {
++               *s++=':'; ++len;
++            }
++         }
++      } else {
++         if (compressing) {
++            compressing=0; compressed=1;
++            *s++=':'; ++len;
++         }
++         i = fmt_xlong(s, temp); len += i; s += i;
++         if (j<14) {
++            *s++ = ':';
++            ++len;
++         }
++      }
++   }
++   if (compressing) {
++      *s++=':'; ++len;
++   }
++   *s=0;
++   return len;
++}
++
++static
++Char *inet62name(struct vki_sockaddr_in6 *sa, UInt len, Char *name)
++{
++   if (sa == NULL || len == 0) {
++      VG_(sprintf)(name, "<unknown>");
++   } else {
++      if (VG_(ntohl)(sa->sin6_port) == 0) {
++         VG_(sprintf)(name, "<unbound>");
++      } else {
++          char addr[100];
++
++          fmt_ip6(addr, (void *)&(sa->sin6_addr));
++          VG_(sprintf)(name, "%s:%u", addr, VG_(ntohs)(sa->sin6_port));
++      }
++   }
++
++   return name;
++}
++
+ /*
+  * Try get some details about a socket.
+  */
+@@ -648,6 +739,7 @@
+    union u {
+       struct vki_sockaddr a;
+       struct vki_sockaddr_in in;
++      struct vki_sockaddr_in6 in6;
+       struct vki_sockaddr_un un;
+    } laddr;
+    Int llen;
+@@ -673,6 +765,22 @@
+          }
+          return;
+          }
++      case VKI_AF_INET6: {
++         static char lname[100];
++         static char pname[100];
++         struct vki_sockaddr_in6 paddr;
++         UInt plen = sizeof(struct vki_sockaddr_in6);
++
++         if(VG_(getpeername)(fd, (struct vki_sockaddr *)&paddr, &plen) != -1) {
++            VG_(message)(Vg_UserMsg, "Open AF_INET6 socket %d: %s <-> %s", fd,
++                         inet62name(&(laddr.in6), llen, lname),
++                         inet62name(&paddr, plen, pname));
++         } else {
++            VG_(message)(Vg_UserMsg, "Open AF_INET6 socket %d: %s <-> unbound",
++                         fd, inet62name(&(laddr.in6), llen, lname));
++         }
++         return;
++         }
+       case VKI_AF_UNIX: {
+          static char lname[256];
+          VG_(message)(Vg_UserMsg, "Open AF_UNIX socket %d: %s\n", fd,

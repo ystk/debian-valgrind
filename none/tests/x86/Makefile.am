@@ -53,6 +53,7 @@ EXTRA_DIST = \
 	looper.stderr.exp looper.stdout.exp looper.vgtest \
 	lzcnt32.stderr.exp lzcnt32.stdout.exp lzcnt32.vgtest \
 	movx.stderr.exp movx.stdout.exp movx.vgtest \
+	movbe.stderr.exp movbe.stdout.exp movbe.vgtest \
 	pushpopseg.stderr.exp pushpopseg.stdout.exp pushpopseg.vgtest \
 	sbbmisc.stderr.exp sbbmisc.stdout.exp sbbmisc.vgtest \
 	shift_ndep.stderr.exp shift_ndep.stdout.exp shift_ndep.vgtest \
@@ -65,6 +66,7 @@ EXTRA_DIST = \
 
 check_PROGRAMS = \
 	aad_aam \
+	allexec \
 	badseg \
 	bt_everything \
 	bt_literal \
@@ -103,11 +105,16 @@ endif
 if !VGCONF_OS_IS_DARWIN
  check_PROGRAMS += cse_fail faultstatus
 endif
+if BUILD_MOVBE_TESTS
+ check_PROGRAMS += movbe
+endif
 
 
 AM_CFLAGS    += @FLAG_M32@ $(FLAG_MMMX) $(FLAG_MSSE)
 AM_CXXFLAGS  += @FLAG_M32@ $(FLAG_MMMX) $(FLAG_MSSE)
 AM_CCASFLAGS += @FLAG_M32@
+
+allexec_CFLAGS		= $(AM_CFLAGS) @FLAG_W_NO_NONNULL@
 
 if VGCONF_OS_IS_DARWIN
 # Some of the tests (bug125959_x86, bug152818_x86, insn_*) need

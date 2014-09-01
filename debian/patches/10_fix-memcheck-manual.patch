@@ -1,0 +1,231 @@
+Description: Fix memcheck manual section formatting
+Origin: upstream, r13757:r13759
+Bug: https://bugs.kde.org/show_bug.cgi?id=328711
+Bug-Debian: http://bugs.debian.org/736994
+Author: Alessandro Ghedini <ghedo@debian.org>
+Last-Update: 2014-01-31
+
+--- a/docs/xml/manual-core.xml
++++ b/docs/xml/manual-core.xml
+@@ -1907,7 +1907,7 @@
+       between fairness and performance. For more details about the
+       Valgrind thread serialisation scheme and its impact on
+       performance and thread scheduling, see
+-      <xref linkend="&vg-pthreads-perf-sched-id;"/>.
++      <xref linkend="&vg-pthreads-perf-sched-id;"/>.</para>
+ 
+       <itemizedlist>
+         <listitem> <para>The value <option>--fair-sched=yes</option>
+@@ -1935,7 +1935,7 @@
+          highest performance.</para>
+         </listitem>
+       </itemizedlist>
+-    </para></listitem>
++    </listitem>
+ 
+   </varlistentry>
+ 
+--- a/drd/docs/drd-manual.xml
++++ b/drd/docs/drd-manual.xml
+@@ -385,30 +385,29 @@
+       <para>
+         Whether to report races between accessing memory and freeing
+         memory. Enabling this option may cause DRD to run slightly
+-        slower. Notes:
+-	<itemizedlist>
+-	  <listitem>
+-	    <para>
+-	      Don't enable this option when using custom memory allocators
+-	      that use
+-	      the <computeroutput>VG_USERREQ__MALLOCLIKE_BLOCK</computeroutput>
+-	      and <computeroutput>VG_USERREQ__FREELIKE_BLOCK</computeroutput>
+-	      because that would result in false positives.
+-	    </para>
+-	  </listitem>
+-	  <listitem>
+-	    <para>Don't enable this option when using reference-counted
+-	      objects because that will result in false positives, even when
+-	      that code has been annotated properly with
+-	      <computeroutput>ANNOTATE_HAPPENS_BEFORE</computeroutput>
+-	      and <computeroutput>ANNOTATE_HAPPENS_AFTER</computeroutput>. See
+-	      e.g.  the output of the following command for an example:
+-	      <computeroutput>valgrind --tool=drd --free-is-write=yes
+-		drd/tests/annotate_smart_pointer</computeroutput>.
+-	    </para>
+-	  </listitem>
+-	</itemizedlist>
+-      </para>
++        slower. Notes:</para>
++      <itemizedlist>
++	<listitem>
++	  <para>
++	    Don't enable this option when using custom memory allocators
++	    that use
++	    the <computeroutput>VG_USERREQ__MALLOCLIKE_BLOCK</computeroutput>
++	    and <computeroutput>VG_USERREQ__FREELIKE_BLOCK</computeroutput>
++	    because that would result in false positives.
++	  </para>
++	</listitem>
++	<listitem>
++	  <para>Don't enable this option when using reference-counted
++	    objects because that will result in false positives, even when
++	    that code has been annotated properly with
++	    <computeroutput>ANNOTATE_HAPPENS_BEFORE</computeroutput>
++	    and <computeroutput>ANNOTATE_HAPPENS_AFTER</computeroutput>. See
++	    e.g.  the output of the following command for an example:
++	    <computeroutput>valgrind --tool=drd --free-is-write=yes
++	      drd/tests/annotate_smart_pointer</computeroutput>.
++	  </para>
++	</listitem>
++      </itemizedlist>
+     </listitem>
+   </varlistentry>
+   <varlistentry>
+--- a/memcheck/docs/mc-manual.xml
++++ b/memcheck/docs/mc-manual.xml
+@@ -610,14 +610,14 @@
+ in one of the following ways:
+ 
+ <itemizedlist>
+-  <listitem>a comma separated list of one or more of
+-    <option>definite indirect possible reachable</option>.
++  <listitem><para>a comma separated list of one or more of
++    <option>definite indirect possible reachable</option>.</para>
+   </listitem>
+ 
+-  <listitem><option>all</option> to specify the complete set (all leak kinds).
++  <listitem><para><option>all</option> to specify the complete set (all leak kinds).</para>
+   </listitem>
+ 
+-  <listitem><option>none</option> for the empty set.
++  <listitem><para><option>none</option> for the empty set.</para>
+   </listitem>
+ </itemizedlist>
+ 
+@@ -718,22 +718,21 @@
+     </term>
+     <listitem>
+       <para>Specifies the leak kinds to show in a full leak search, in
+-      one of the following ways:
++      one of the following ways: </para>
+ 
+-        <itemizedlist>
+-          <listitem>a comma separated list of one or more of
+-            <option>definite indirect possible reachable</option>.
+-          </listitem>
+-          
+-          <listitem><option>all</option> to specify the complete set (all leak kinds).
++      <itemizedlist>
++        <listitem><para>a comma separated list of one or more of
++            <option>definite indirect possible reachable</option>.</para>
++        </listitem>
++        
++        <listitem><para><option>all</option> to specify the complete set (all leak kinds).
+             It is equivalent to
+-            <option>--show-leak-kinds=definite,indirect,possible,reachable</option>.
+-          </listitem>
+-          
+-          <listitem><option>none</option> for the empty set.
+-          </listitem>
+-        </itemizedlist>
+-      </para>
++            <option>--show-leak-kinds=definite,indirect,possible,reachable</option>.</para>
++        </listitem>
++        
++        <listitem><para><option>none</option> for the empty set.</para>
++        </listitem>
++      </itemizedlist>
+     </listitem>
+   </varlistentry>
+ 
+@@ -757,32 +756,30 @@
+     </term>
+     <listitem>
+       <para>Specifies the set of leak check heuristics to be used
+-        during 
+-        leak searches.  The heuristics control which interior pointers
++        during leak searches.  The heuristics control which interior pointers
+         to a block cause it to be considered as reachable.
+-        The heuristic set is specified in one of the following ways:
++        The heuristic set is specified in one of the following ways:</para>
+ 
+-        <itemizedlist>
+-          <listitem>a comma separated list of one or more of
+-            <option>stdstring newarray multipleinheritance</option>.
+-          </listitem>
++      <itemizedlist>
++        <listitem><para>a comma separated list of one or more of
++            <option>stdstring newarray multipleinheritance</option>.</para>
++        </listitem>
+           
+-          <listitem><option>all</option> to activate the complete set of
++        <listitem><para><option>all</option> to activate the complete set of
+             heuristics.
+             It is equivalent to
+-            <option>--leak-check-heuristics=stdstring,newarray,multipleinheritance</option>.
+-          </listitem>
+-          
+-          <listitem><option>none</option> for the empty set.
+-          </listitem>
+-        </itemizedlist>
+-      </para>
++            <option>--leak-check-heuristics=stdstring,newarray,multipleinheritance</option>.</para>
++        </listitem>
++        
++        <listitem><para><option>none</option> for the empty set.</para>
++        </listitem>
++      </itemizedlist>
++    </listitem>
+ 
+-      <para>Note that these heuristics are dependent on the layout of the objects
++    <para>Note that these heuristics are dependent on the layout of the objects
+       produced by the C++ compiler. They have been tested with some gcc versions
+       (e.g. 4.4 and 4.7). They might not work properly with other C++ compilers.
+-      </para>
+-    </listitem>
++    </para>
+   </varlistentry>
+ 
+ 
+@@ -795,24 +792,30 @@
+     </term>
+     <listitem>
+       <para>These options provide an alternative way to specify the leak kinds to show:
+-        <itemizedlist>
+-          <listitem>
++      </para>
++      <itemizedlist>
++        <listitem>
++	  <para>
+             <option>--show-reachable=no --show-possibly-lost=yes</option> is equivalent to
+             <option>--show-leak-kinds=definite,possible</option>.
+-          </listitem>
+-          <listitem>
++	  </para>
++        </listitem>
++        <listitem>
++	  <para>
+             <option>--show-reachable=no --show-possibly-lost=no</option> is equivalent to
+             <option>--show-leak-kinds=definite</option>.
+-          </listitem>
+-          <listitem>
++	  </para>
++        </listitem>
++        <listitem>
++	  <para>
+             <option>--show-reachable=yes</option> is equivalent to
+             <option>--show-leak-kinds=all</option>.
+-            Note that  <option>--show-possibly-lost=no</option> has no effect
+-            if <option>--show-reachable=yes</option> is specified.
+-          </listitem>
+-        </itemizedlist>
+-      </para>
++	  </para>
++        </listitem>
++      </itemizedlist>
+     </listitem>
++    <para> Note that  <option>--show-possibly-lost=no</option> has no effect
++      if <option>--show-reachable=yes</option> is specified.</para>
+   </varlistentry>
+   
+   <varlistentry id="opt.undef-value-errors" xreflabel="--undef-value-errors">

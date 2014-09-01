@@ -7,7 +7,7 @@
    This file is part of Valgrind, a dynamic binary instrumentation
    framework.
 
-   Copyright (C) 2005-2011 Apple Inc.
+   Copyright (C) 2005-2013 Apple Inc.
       Greg Parker  gparker@apple.com
 
    This program is free software; you can redistribute it and/or
@@ -31,7 +31,8 @@
 #ifndef __PRIV_SYSWRAP_DARWIN_H
 #define __PRIV_SYSWRAP_DARWIN_H
 
-/* requires #include "priv_types_n_macros.h" */
+#include "pub_core_basics.h"         // ThreadId
+#include "priv_types_n_macros.h"     // DECL_TEMPLATE
 
 // syswrap-darwin.c
 Addr allocstack ( ThreadId tid );
@@ -324,7 +325,7 @@ DECL_TEMPLATE(darwin, shmctl);                  // 263
 DECL_TEMPLATE(darwin, shmdt);                   // 264
 DECL_TEMPLATE(darwin, shmget);                  // 265
 DECL_TEMPLATE(darwin, shm_open);                // 266
-// NYI shm_unlink 267
+DECL_TEMPLATE(darwin, shm_unlink);              // 267
 DECL_TEMPLATE(darwin, sem_open);                // 268
 DECL_TEMPLATE(darwin, sem_close);               // 269
 DECL_TEMPLATE(darwin, sem_unlink);              // 270
@@ -559,6 +560,16 @@ DECL_TEMPLATE(darwin, mach_msg_task);
 DECL_TEMPLATE(darwin, mach_msg_thread);
 
 // Mach traps
+#if DARWIN_VERS == DARWIN_10_8
+DECL_TEMPLATE(darwin, mach__10);
+DECL_TEMPLATE(darwin, mach__12);
+DECL_TEMPLATE(darwin, mach__14);
+DECL_TEMPLATE(darwin, mach__16);
+DECL_TEMPLATE(darwin, mach__18);
+DECL_TEMPLATE(darwin, mach__19);
+DECL_TEMPLATE(darwin, mach__20);
+DECL_TEMPLATE(darwin, mach__21);
+#endif /* DARWIN_VERS == DARWIN_10_8 */
 DECL_TEMPLATE(darwin, mach_msg_unhandled);
 DECL_TEMPLATE(darwin, mach_msg);
 DECL_TEMPLATE(darwin, mach_reply_port);

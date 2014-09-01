@@ -1,3 +1,147 @@
+valgrind (1:3.9.0-7) unstable; urgency=medium
+
+  * Remove index() Debian-specific suppressions (not needed anymore)
+  * Add 13_xabort.patch to add support for XABORT (Closes: #754496)
+  * Switch to dh-autoreconf
+  * No need to patch 'configure' as well as 'configure.ac' due to autoreconf
+
+ -- Alessandro Ghedini <ghedo@debian.org>  Wed, 23 Jul 2014 11:47:13 +0200
+
+valgrind (1:3.9.0-6) unstable; urgency=medium
+
+  * Improve misleading note about suppressions in README.Debian
+  * Add note about valgrind-dbg Recommends in README.Debian
+  * Add 12_glibc-2.19.patch to fix build against glibc 2.19 (Closes: #751701)
+
+ -- Alessandro Ghedini <ghedo@debian.org>  Sun, 15 Jun 2014 20:20:54 +0200
+
+valgrind (1:3.9.0-5) unstable; urgency=medium
+
+  * Add 10_fix-memcheck-manual.patch (Closes: #736994)
+  * Add suppressions to avoid errors from index() with newer libc
+  * Add 11_track-af_inet6.patch to fix AF_INET6 sockets tracking
+    (Closes: #733119)
+
+ -- Alessandro Ghedini <ghedo@debian.org>  Sun, 23 Feb 2014 20:04:38 +0100
+
+valgrind (1:3.9.0-4) unstable; urgency=medium
+
+  * Add Breaks+Replaces: valgrind-dev on valgrind
+
+ -- Alessandro Ghedini <ghedo@debian.org>  Mon, 16 Dec 2013 00:46:58 +0100
+
+valgrind (1:3.9.0-3) unstable; urgency=medium
+
+  * Revert the move of the headers and pkg-config file to valgrind-dev
+    (cfr: #731228) (Closes: #732239)
+
+ -- Alessandro Ghedini <ghedo@debian.org>  Mon, 16 Dec 2013 00:20:48 +0100
+
+valgrind (1:3.9.0-2) unstable; urgency=medium
+
+  * Remove valgrind.manpages (manpages are installed anyway)
+  * Build on mips64 and mips64el (Closes: #729040)
+  * Add 09_fix-armhf-detect.patch to fix FTBFS on armhf (Closes: #730844)
+  * Move headers and pkg-config file to valgrind-dev (Closes: #731228)
+    See Debian.NEWS for more info
+  * Bump Standards-Version to 3.9.5 (no changes needed)
+
+ -- Alessandro Ghedini <ghedo@debian.org>  Tue, 10 Dec 2013 19:28:22 +0100
+
+valgrind (1:3.9.0-1) unstable; urgency=low
+
+  * New upstream release
+  * Drop patches merged/fixed upstream:
+    - 01_more-vg-n-segments.patch
+    - 09_valgrind-listener-manpage.patch
+    - 10_unbreak-xinclude-in-manpage.patch
+    - 11_glibc-2.17.patch
+    - 12_bcopy.patch
+    - 13_pthread-cond-init.patch
+  * Refresh patches
+  * Update 08_fix-spelling-in-manpage.patch
+
+ -- Alessandro Ghedini <ghedo@debian.org>  Tue, 05 Nov 2013 20:54:28 +0100
+
+valgrind (1:3.8.1-6) unstable; urgency=low
+
+  * Only install BSD-licensed header files (Closes: #725223)
+  * Fix lintian vcs-field-not-canonical
+  * Do not install/use outdated and useless debian-libc6-dbg.supp anymore
+  * Add note in README.Debian about installed suppression files
+    (Closes: #725522)
+  * Do not build on armel anymore (Closes: #720409)
+
+ -- Alessandro Ghedini <ghedo@debian.org>  Thu, 31 Oct 2013 11:34:53 +0100
+
+valgrind (1:3.8.1-5) unstable; urgency=low
+
+  * Enable build on x32 architecture (Closes: #718368)
+  * Instrument pthread_cond_init() in Helgrind (Closes: #723699)
+
+ -- Alessandro Ghedini <ghedo@debian.org>  Tue, 24 Sep 2013 13:01:22 +0200
+
+valgrind (1:3.8.1-4) unstable; urgency=low
+
+  * Build with -mips2 on mipsel.
+    Thanks to Fuxin Zhang (Closes: #710307)
+  * Add 12_bcopy.patch (Closes: #691109)
+
+ -- Alessandro Ghedini <ghedo@debian.org>  Sat, 01 Jun 2013 15:51:47 +0200
+
+valgrind (1:3.8.1-3) unstable; urgency=low
+
+  * Add 11_glibc-2.17.patch to fix FTBFS with glibc 2.17 (Closes: #707438)
+
+ -- Alessandro Ghedini <ghedo@debian.org>  Fri, 10 May 2013 18:10:39 +0200
+
+valgrind (1:3.8.1-2) unstable; urgency=low
+
+  [ Alessandro Ghedini ]
+  * Bump Standards-Version to 3.9.4 (no changes needed)
+  * Quote LD_LIBRARY_PATH in the wrapper script to avoid errors with spaced
+    paths (LP: #880685)
+  * Enable support for mipsel too (Closes: #696850)
+  * Add suppression for dlopen() leak when linking with -lpthread
+    (Closes: #700899)
+
+  [ Samuel Bronson ]
+  * Allow building more than once from the same tree
+    - Build and ship FAQ.txt from sources, since the bundled copy is deleted
+      on "make clean"
+  * Drop docs/valgrind.1 changes from 08_fix-spelling-in-manpage.patch
+  * Add 10_unbreak-xinclude-in-manpage.patch to fix a broken XInclude
+    (Closes: #696694)
+
+ -- Alessandro Ghedini <ghedo@debian.org>  Wed, 20 Feb 2013 11:21:07 +0100
+
+valgrind (1:3.8.1-1) unstable; urgency=low
+
+  * New upstream release
+  * Update 02_version.patch
+
+ -- Alessandro Ghedini <ghedo@debian.org>  Wed, 19 Sep 2012 19:59:34 +0200
+
+valgrind (1:3.8.0-1) unstable; urgency=low
+
+  * New upstream release
+    - Increase maximum allowed alignment for memalign (Closes: #489297)
+    - Support for Intel AVX instructions (Closes: #655468)
+    - Fix some C++ template symbols demangling (Closes: #493284)
+  * Fix debian.supp madness (Closes: #661523):
+    - Remove python suppressions from debian.supp
+      (already provided by the python package)
+    - Remove outdated suppressions from debian.supp
+      (i.e. those matching old libraries)
+    - Remove useless suppressions and clean-up remaining
+  * Update upstream copyright
+  * Enable support for mips
+  * Drop 06_fix-configure.patch (fixed upstream)
+  * Refresh patches
+  * Update 07_fix-spelling-in-binary.patch
+
+ -- Alessandro Ghedini <ghedo@debian.org>  Sat, 11 Aug 2012 14:24:56 +0200
+
 valgrind (1:3.7.0-6) unstable; urgency=low
 
   * Explicitly pass -I/usr/include/$(DEB_HOST_GNU_TYPE) compiler flag

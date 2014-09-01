@@ -7,7 +7,7 @@
    This file is part of Valgrind, a dynamic binary instrumentation
    framework.
 
-   Copyright IBM Corp. 2010-2011
+   Copyright IBM Corp. 2010-2013
 
    This program is free software; you can redistribute it and/or
    modify it under the terms of the GNU General Public License as
@@ -332,6 +332,18 @@ typedef struct vki_sigaltstack {
 #define VKI_F_SETSIG	10	/* for sockets. */
 #define VKI_F_GETSIG	11	/* for sockets. */
 
+#define VKI_F_SETOWN_EX		15
+#define VKI_F_GETOWN_EX		16
+
+#define VKI_F_OWNER_TID		0
+#define VKI_F_OWNER_PID		1
+#define VKI_F_OWNER_PGRP	2
+
+struct vki_f_owner_ex {
+	int	type;
+	__vki_kernel_pid_t	pid;
+};
+
 #define VKI_FD_CLOEXEC  1  /* actually anything with low bit set goes */
 
 #define VKI_F_LINUX_SPECIFIC_BASE   1024
@@ -357,6 +369,7 @@ typedef struct vki_sigaltstack {
 
 #define VKI_SO_TYPE         3
 
+#define VKI_SO_ATTACH_FILTER        26
 
 //----------------------------------------------------------------------
 // From linux-2.6.16.60/include/asm-s390/sockios.h
@@ -590,7 +603,9 @@ struct vki_termios {
 #define VKI_TIOCGPTN	_VKI_IOR('T',0x30, unsigned int) /* Get Pty Number (of pty-mux device) */
 #define VKI_TIOCSPTLCK	_VKI_IOW('T',0x31, int)  /* Lock/unlock Pty */
 
-#define VKI_FIOASYNC	        0x5452
+#define VKI_FIONCLEX	0x5450
+#define VKI_FIOCLEX	0x5451
+#define VKI_FIOASYNC	0x5452
 
 #define VKI_TIOCSERGETLSR       0x5459 /* Get line status register */
 

@@ -7,7 +7,7 @@
    This file is part of Valgrind, a dynamic binary instrumentation
    framework.
 
-   Copyright (C) 2004-2011 OpenWorks LLP
+   Copyright (C) 2004-2013 OpenWorks LLP
       info@open-works.net
 
    This program is free software; you can redistribute it and/or
@@ -154,7 +154,7 @@ static Bool instrMentionsReg (
    HRegUsage reg_usage;
    (*getRegUsage)(&reg_usage, instr, mode64);
    for (i = 0; i < reg_usage.n_used; i++)
-      if (reg_usage.hreg[i] == r)
+      if (sameHReg(reg_usage.hreg[i], r))
          return True;
    return False;
 }
@@ -207,10 +207,11 @@ Int findMostDistantlyMentionedVReg (
 /* Check that this vreg has been assigned a sane spill offset. */
 static inline void sanity_check_spill_offset ( VRegLR* vreg )
 {
-   if (vreg->reg_class == HRcVec128 || vreg->reg_class == HRcFlt64) {
-      vassert(0 == ((UShort)vreg->spill_offset % 16));
-   } else {
-      vassert(0 == ((UShort)vreg->spill_offset % 8));
+   switch (vreg->reg_class) {
+      case HRcVec128: case HRcFlt64:
+         vassert(0 == ((UShort)vreg->spill_offset % 16)); break;
+      default:
+         vassert(0 == ((UShort)vreg->spill_offset % 8)); break;
    }
 }
 
@@ -398,14 +399,14 @@ HInstrArray* doRegisterAllocation (
       not at each insn processed. */
    Bool do_sanity_check;
 
-   vassert(0 == (guest_sizeB % 16));
-   vassert(0 == (LibVEX_N_SPILL_BYTES % 16));
-   vassert(0 == (N_SPILL64S % 2));
+   vassert(0 == (guest_sizeB % 32));
+   vassert(0 == (LibVEX_N_SPILL_BYTES % 32));
+   vassert(0 == (N_SPILL64S % 4));
 
    /* The live range numbers are signed shorts, and so limiting the
-      number of insns to 10000 comfortably guards against them
+      number of insns to 15000 comfortably guards against them
       overflowing 32k. */
-   vassert(instrs_in->arr_used <= 10000);
+   vassert(instrs_in->arr_used <= 15000);
 
 #  define INVALID_INSTRNO (-2)
 
@@ -620,7 +621,7 @@ HInstrArray* doRegisterAllocation (
             stack pointer register, or some other register beyond our
             control, in which case we should just ignore it. */
          for (k = 0; k < n_available_real_regs; k++)
-            if (available_real_regs[k] == rreg)
+            if (sameHReg(available_real_regs[k], rreg))
                break;
          if (k == n_available_real_regs) 
             continue; /* not found -- ignore. */
@@ -728,7 +729,7 @@ HInstrArray* doRegisterAllocation (
       /* rreg is involved in a HLR.  Record this info in the array, if
          there is space. */
       for (k = 0; k < n_rregs; k++)
-         if (rreg_state[k].rreg == rreg)
+         if (sameHReg(rreg_state[k].rreg, rreg))
             break;
       vassert(k < n_rregs); /* else rreg was not found in rreg_state?! */
       rreg_state[k].has_hlrs = True;
@@ -790,17 +791,23 @@ HInstrArray* doRegisterAllocation (
 
    /* Each spill slot is 8 bytes long.  For vregs which take more than
       64 bits to spill (classes Flt64 and Vec128), we have to allocate
-      two spill slots.
+      two consecutive spill slots.  For 256 bit registers (class
+      Vec256), we have to allocate four consecutive spill slots.
 
       For Vec128-class on PowerPC, the spill slot's actual address
       must be 16-byte aligned.  Since the spill slot's address is
       computed as an offset from the guest state pointer, and since
       the user of the generated code must set that pointer to a
-      16-aligned value, we have the residual obligation here of
+      32-aligned value, we have the residual obligation here of
       choosing a 16-aligned spill slot offset for Vec128-class values.
       Since each spill slot is 8 bytes long, that means for
       Vec128-class values we must allocated a spill slot number which
       is zero mod 2.
+
+      Similarly, for Vec256 calss on amd64, find a spill slot number
+      which is zero mod 4.  This guarantees it will be 32 byte
+      aligned, which isn't actually necessary on amd64 (we use movUpd
+      etc to spill), but seems like good practice.
 
       Do a rank-based allocation of vregs to spill slot numbers.  We
       put as few values as possible in spill slots, but nevertheless
@@ -821,48 +828,49 @@ HInstrArray* doRegisterAllocation (
       }
 
       /* The spill slots are 64 bits in size.  As per the comment on
-         definition of HRegClass in host_generic_regs.h, that means, to
-         spill a vreg of class Flt64 or Vec128, we'll need to find two
-         adjacent spill slots to use.  Note, this logic needs to kept
-         in sync with the size info on the definition of HRegClass. */
+         definition of HRegClass in host_generic_regs.h, that means,
+         to spill a vreg of class Flt64 or Vec128, we'll need to find
+         two adjacent spill slots to use.  For Vec256, we'll need to
+         find four adjacent slots to use.  Note, this logic needs to
+         kept in sync with the size info on the definition of
+         HRegClass. */
+      switch (vreg_lrs[j].reg_class) {
 
-      if (vreg_lrs[j].reg_class == HRcVec128
-          || vreg_lrs[j].reg_class == HRcFlt64) {
+         case HRcVec128: case HRcFlt64:
+            /* Find two adjacent free slots in which between them
+               provide up to 128 bits in which to spill the vreg.
+               Since we are trying to find an even:odd pair, move
+               along in steps of 2 (slots). */
+            for (k = 0; k < N_SPILL64S-1; k += 2)
+               if (ss_busy_until_before[k+0] <= vreg_lrs[j].live_after
+                   && ss_busy_until_before[k+1] <= vreg_lrs[j].live_after)
+                  break;
+            if (k >= N_SPILL64S-1) {
+               vpanic("LibVEX_N_SPILL_BYTES is too low.  " 
+                      "Increase and recompile.");
+            }
+            if (0) vex_printf("16-byte spill offset in spill slot %d\n",
+                              (Int)k);
+            ss_busy_until_before[k+0] = vreg_lrs[j].dead_before;
+            ss_busy_until_before[k+1] = vreg_lrs[j].dead_before;
+            break;
 
-         /* Find two adjacent free slots in which between them provide
-            up to 128 bits in which to spill the vreg.  Since we are
-            trying to find an even:odd pair, move along in steps of 2
-            (slots). */
+         default:
+            /* The ordinary case -- just find a single spill slot. */
+            /* Find the lowest-numbered spill slot which is available
+               at the start point of this interval, and assign the
+               interval to it. */
+            for (k = 0; k < N_SPILL64S; k++)
+               if (ss_busy_until_before[k] <= vreg_lrs[j].live_after)
+                  break;
+            if (k == N_SPILL64S) {
+               vpanic("LibVEX_N_SPILL_BYTES is too low.  " 
+                      "Increase and recompile.");
+            }
+            ss_busy_until_before[k] = vreg_lrs[j].dead_before;
+            break;
 
-         for (k = 0; k < N_SPILL64S-1; k += 2)
-            if (ss_busy_until_before[k] <= vreg_lrs[j].live_after
-                && ss_busy_until_before[k+1] <= vreg_lrs[j].live_after)
-               break;
-         if (k >= N_SPILL64S-1) {
-            vpanic("LibVEX_N_SPILL_BYTES is too low.  " 
-                   "Increase and recompile.");
-         }
-         if (0) vex_printf("16-byte spill offset in spill slot %d\n", (Int)k);
-         ss_busy_until_before[k+0] = vreg_lrs[j].dead_before;
-         ss_busy_until_before[k+1] = vreg_lrs[j].dead_before;
-
-      } else {
-
-         /* The ordinary case -- just find a single spill slot. */
-
-         /* Find the lowest-numbered spill slot which is available at
-            the start point of this interval, and assign the interval
-            to it. */
-         for (k = 0; k < N_SPILL64S; k++)
-            if (ss_busy_until_before[k] <= vreg_lrs[j].live_after)
-               break;
-         if (k == N_SPILL64S) {
-            vpanic("LibVEX_N_SPILL_BYTES is too low.  " 
-                   "Increase and recompile.");
-         }
-         ss_busy_until_before[k] = vreg_lrs[j].dead_before;
-
-      }
+      } /* switch (vreg_lrs[j].reg_class) { */
 
       /* This reflects LibVEX's hard-wired knowledge of the baseBlock
          layout: the guest state, then two equal sized areas following
@@ -950,7 +958,7 @@ HInstrArray* doRegisterAllocation (
 
                /* find the state entry for this rreg */
                for (k = 0; k < n_rregs; k++)
-                  if (rreg_state[k].rreg == rreg_lrs_la[j].rreg)
+                  if (sameHReg(rreg_state[k].rreg, rreg_lrs_la[j].rreg))
                      break;
 
                /* and assert that this rreg is marked as unavailable */
@@ -969,7 +977,7 @@ HInstrArray* doRegisterAllocation (
             if (rreg_state[j].disp != Unavail)
                continue;
             for (k = 0; k < rreg_lrs_used; k++) 
-               if (rreg_lrs_la[k].rreg == rreg_state[j].rreg
+               if (sameHReg(rreg_lrs_la[k].rreg, rreg_state[j].rreg)
                    && rreg_lrs_la[k].live_after < ii 
                    && ii < rreg_lrs_la[k].dead_before) 
                   break;
@@ -1044,7 +1052,8 @@ HInstrArray* doRegisterAllocation (
 #        endif
          /* Find the state entry for vregS. */
          for (m = 0; m < n_rregs; m++)
-            if (rreg_state[m].disp == Bound && rreg_state[m].vreg == vregS)
+            if (rreg_state[m].disp == Bound
+                && sameHReg(rreg_state[m].vreg, vregS))
                break;
          if (m == n_rregs)
             /* We failed to find a binding for vregS, which means it's
@@ -1079,9 +1088,9 @@ HInstrArray* doRegisterAllocation (
       for (j = 0; j < n_rregs; j++) {
          if (rreg_state[j].disp != Bound)
             continue;
-         vreg = hregNumber(rreg_state[j].vreg);
-         vassert(IS_VALID_VREGNO(vreg));
-         if (vreg_lrs[vreg].dead_before <= ii) {
+         UInt vregno = hregNumber(rreg_state[j].vreg);
+         vassert(IS_VALID_VREGNO(vregno));
+         if (vreg_lrs[vregno].dead_before <= ii) {
             rreg_state[j].disp = Free;
             rreg_state[j].eq_spill_slot = False;
             m = hregNumber(rreg_state[j].vreg);
@@ -1134,7 +1143,7 @@ HInstrArray* doRegisterAllocation (
          vex_printf("\n\n");
 #        endif
          for (k = 0; k < n_rregs; k++)
-            if (rreg_state[k].rreg == rreg_lrs_la[rreg_lrs_la_next].rreg)
+            if (sameHReg(rreg_state[k].rreg, rreg_lrs_la[rreg_lrs_la_next].rreg))
                break;
          /* If this fails, we don't have an entry for this rreg.
             Which we should. */
@@ -1223,7 +1232,7 @@ HInstrArray* doRegisterAllocation (
                   /* ok, it is spilled.  Now, is this its last use? */
                   vassert(vreg_lrs[m].dead_before >= ii+1);
                   if (vreg_lrs[m].dead_before == ii+1
-                      && cand == INVALID_HREG) {
+                      && hregIsInvalid(cand)) {
                      spilloff = vreg_lrs[m].spill_offset;
                      cand = vreg;
                   }
@@ -1231,10 +1240,10 @@ HInstrArray* doRegisterAllocation (
             }
          }
 
-         if (nreads == 1 && cand != INVALID_HREG) {
+         if (nreads == 1 && ! hregIsInvalid(cand)) {
             HInstr* reloaded;
             if (reg_usage.n_used == 2)
-               vassert(reg_usage.hreg[0] != reg_usage.hreg[1]);
+               vassert(! sameHReg(reg_usage.hreg[0], reg_usage.hreg[1]));
 
             reloaded = directReload ( instrs_in->arr[ii], cand, spilloff );
             if (debug_direct_reload && !reloaded) {
@@ -1370,7 +1379,7 @@ HInstrArray* doRegisterAllocation (
                continue;
             rreg_state[k].is_spill_cand = True;
             for (m = 0; m < reg_usage.n_used; m++) {
-               if (rreg_state[k].vreg == reg_usage.hreg[m]) {
+               if (sameHReg(rreg_state[k].vreg, reg_usage.hreg[m])) {
                   rreg_state[k].is_spill_cand = False;
                   break;
                }
@@ -1402,7 +1411,7 @@ HInstrArray* doRegisterAllocation (
          vassert(hregClass(rreg_state[spillee].rreg) == hregClass(vreg));
          /* check we're not ejecting the vreg for which we are trying
             to free up a register. */
-         vassert(rreg_state[spillee].vreg != vreg);
+         vassert(! sameHReg(rreg_state[spillee].vreg, vreg));
 
          m = hregNumber(rreg_state[spillee].vreg);
          vassert(IS_VALID_VREGNO(m));
@@ -1500,7 +1509,7 @@ HInstrArray* doRegisterAllocation (
          /* rreg_lrs_db[[rreg_lrs_db_next].rreg is exiting a hard live
             range.  Mark it as such in the main rreg_state array. */
          for (k = 0; k < n_rregs; k++)
-            if (rreg_state[k].rreg == rreg_lrs_db[rreg_lrs_db_next].rreg)
+           if (sameHReg(rreg_state[k].rreg, rreg_lrs_db[rreg_lrs_db_next].rreg))
                break;
          /* If this vassertion fails, we don't have an entry for
             this rreg.  Which we should. */
@@ -1530,7 +1539,7 @@ HInstrArray* doRegisterAllocation (
 
    /* Paranoia */
    for (j = 0; j < n_rregs; j++)
-      vassert(rreg_state[j].rreg == available_real_regs[j]);
+      vassert(sameHReg(rreg_state[j].rreg, available_real_regs[j]));
 
    vassert(rreg_lrs_la_next == rreg_lrs_used);
    vassert(rreg_lrs_db_next == rreg_lrs_used);

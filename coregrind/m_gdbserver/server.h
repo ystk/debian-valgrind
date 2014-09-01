@@ -1,6 +1,6 @@
 /* Common definitions for remote server for GDB.
    Copyright (C) 1993, 1995, 1997, 1998, 1999, 2000, 2002, 2003, 2004, 2005,
-   2006
+   2006, 2012
    Free Software Foundation, Inc.
 
    This file is part of GDB.
@@ -35,17 +35,17 @@
 #include "pub_core_libcprint.h"
 #include "pub_core_mallocfree.h"
 #include "pub_core_syscall.h"
-#include "pub_tool_libcproc.h"
+#include "pub_core_libcproc.h"
 #include "pub_core_tooliface.h"
-#include "pub_tool_libcassert.h"
-#include "pub_tool_libcbase.h"
-#include "pub_tool_options.h"
-#include "pub_core_gdbserver.h"
-#include "pub_tool_libcsetjmp.h"
+#include "pub_core_libcassert.h"
+#include "pub_core_libcbase.h"
+#include "pub_core_options.h"
+#include "pub_core_libcsetjmp.h"
 #include "pub_core_threadstate.h"
+#include "pub_core_gdbserver.h"
 #include "pub_core_aspacemgr.h"
-#include "pub_tool_vki.h"
-#include "valgrind.h"
+#include "pub_core_vki.h"
+#include "pub_core_clreq.h"
 
 /*------------- interface m_gdbserver <=> low level gdbserver */
 
@@ -63,7 +63,7 @@ extern void gdbserver_terminate (void);
 
 
 /* Output string s to the gdb debugging this process or to vgdb.
-   Do not call this directly. Rather use VG_(monitor_print) 
+   Do not call this directly. Rather use VG_(gdb_printf) 
    to output something to gdb, use normal valgrind messaging
    (e.g. VG_(umsg)) to send output that can either go
    to gdb or to log. */
@@ -76,7 +76,7 @@ extern void monitor_output (char *s);
    returns 2 if remote_desc_activity detected the connection has been
              lost and should be reopened.
    msg is used for debug logging.*/
-extern int remote_desc_activity(char *msg);
+extern int remote_desc_activity(const char *msg);
 
 /* output some status of gdbserver communication */
 extern void remote_utils_output_status(void);
@@ -92,7 +92,12 @@ extern void remote_finish(FinishReason reason);
 /* If Valgrind sink was changed by gdbserver:
       Resets the valgrind sink to before the changes done by gdbserver,
       and does VG_(umsg). If info != NULL, info added in VG_(usmg). */
-extern void reset_valgrind_sink(char* info);
+extern void reset_valgrind_sink(const char* info);
+
+// VG_(gdb_printf) by default writes to vgdb/gdb.
+// If there is no connection, it will rather write to the initial (log)
+// valgrind fd using the below.
+extern void print_to_initial_valgrind_sink (const char *msg);
 
 /* For ARM usage.
    Guesses if pc is a thumb pc.
@@ -106,34 +111,6 @@ extern void reset_valgrind_sink(char* info);
    
    If debug info not found for this pc, assumes arm */
 extern Addr thumb_pc (Addr pc);
-
-/* True if gdbserver is single stepping the valgrind process */
-extern Bool valgrind_single_stepping(void);
-
-/* Set Valgrind in single stepping mode or not according to Bool. */
-extern void valgrind_set_single_stepping(Bool);
-
-/* gets the addr at which a (possible) break must be ignored once.
-   If there is no such break to be ignored once, 0 is returned.
-   This is needed for the following case:
-   The user sets a break at address AAA.
-   The break is encountered. Then the user does stepi 
-   (i.e. step one instruction).
-   In such a case, the already encountered break must be ignored
-   to ensure the stepi will advance by one instruction: a "break"
-   is implemented in valgrind by some helper code just after the
-   instruction mark at which the break is set. This helper code
-   verifies if either there is a break at the current PC
-   or if we are in stepping mode. If we are in stepping mode,
-   the already encountered break must be ignored once to advance
-   to the next instruction.
-   ??? need to check if this is *really* needed. */
-extern Addr valgrind_get_ignore_break_once(void);
-
-/* When addr > 0, ensures the next stop reply packet informs
-   gdb about the encountered watchpoint.
-   Use addr 0x0 to reset. */
-extern void VG_(set_watchpoint_stop_address) (Addr addr);
 
 /* when invoked by vgdb using ptrace, contains the tid chosen
    by vgdb (if vgdb gives a tid different of 0: a 0 tid by
@@ -162,27 +139,27 @@ extern ThreadId vgdb_interrupted_tid;
 #define VKI_POLLNVAL          0x0020
 
 /* a bunch of macros to avoid libc usage in valgrind-ified gdbserver */ 
-#define strcmp(s1,s2)         VG_(strcmp) ((Char *)(s1),(Char *)(s2))
-#define strncmp(s1,s2,nmax)   VG_(strncmp) ((Char *)(s1),(Char *)(s2),nmax)
-#define strcat(s1,s2)         VG_(strcat) ((Char *)(s1),(Char *)(s2))
-#define strcpy(s1,s2)         VG_(strcpy) ((Char *)(s1),(Char *)(s2))
-#define strncpy(s1,s2,nmax)   VG_(strncpy) ((Char *)(s1),(Char *)(s2),nmax)
-#define strlen(s)             VG_(strlen) ((Char *)(s))
-#define strtok(p,s)           (char *) VG_(strtok) ((Char *)(p),(Char *)(s))
-#define strtok_r(p,s,ss)      (char *) VG_(strtok_r) ((Char *)(p),(Char *)(s),(Char **)(ss))
-#define strchr(s,c)           (char *) VG_(strchr) ((Char *)(s),c)
+#define strcmp(s1,s2)         VG_(strcmp) ((s1),(s2))
+#define strncmp(s1,s2,nmax)   VG_(strncmp) ((s1),(s2),nmax)
+#define strcat(s1,s2)         VG_(strcat) ((s1),(s2))
+#define strcpy(s1,s2)         VG_(strcpy) ((s1),(s2))
+#define strncpy(s1,s2,nmax)   VG_(strncpy) ((s1),(s2),nmax)
+#define strlen(s)             VG_(strlen) ((s))
+#define strtok(p,s)           VG_(strtok) ((p),(s))
+#define strtok_r(p,s,ss)      VG_(strtok_r) ((p),(s),(ss))
+#define strchr(s,c)           VG_(strchr) ((s),c)
 /* strtol and strtoul supports base 16 or else assumes it is base 10 */
 #define strtol(s,r,b)         ((b) == 16 ? \
-                               VG_(strtoll16) ((Char *)(s),(Char **)(r)) \
-                               : VG_(strtoll10) ((Char *)(s),(Char **)(r)))
+                               VG_(strtoll16) ((s),(r)) \
+                               : VG_(strtoll10) ((s),(r)))
 #define strtoul(s,r,b)        ((b) == 16 ? \
-                               VG_(strtoull16) ((Char *)(s),(Char **)(r)) \
-                               : VG_(strtoull10) ((Char *)(s),(Char **)(r)))
+                               VG_(strtoull16) ((s),(r)) \
+                               : VG_(strtoull10) ((s),(r)))
 
 #define malloc(sz)            VG_(arena_malloc)  (VG_AR_CORE, "gdbsrv", sz)
 #define calloc(n,sz)          VG_(arena_calloc)  (VG_AR_CORE, "gdbsrv", n, sz)
 #define realloc(p,size)       VG_(arena_realloc) (VG_AR_CORE, "gdbsrv", p, size)
-#define strdup(s)             (char *) VG_(arena_strdup)  (VG_AR_CORE, "gdbsrv", (Char *)(s))
+#define strdup(s)             VG_(arena_strdup)  (VG_AR_CORE, "gdbsrv", (s))
 #define free(b)               VG_(arena_free)    (VG_AR_CORE, b)
 
 #ifndef ATTR_NORETURN
@@ -226,35 +203,36 @@ struct thread_info;
 #include "gdb/signals.h"
 
 /* signal handling with gdbserver: before delivering a signal,
-   call gdbserver_signal_encountered then give control to
-   gdbserver by calling call_gdbserver.
-   On return, call gdbserver_deliver_signal to effectively
-   deliver the signal or not. */
-extern void gdbserver_signal_encountered (Int sigNo);
+   call gdbserver_signal_encountered. This will set
+   the signal to report in the next resume reply sent to GDB.
+   A call to call_gdbserver is needed to send the resume reply to GDB.
+   After this call, gdbserver_deliver_signal indicates if the signal
+   is effectively to be delivered to the guest process. */
+extern void gdbserver_signal_encountered (Int vki_sigNo);
 /* between these two calls, call call_gdbserver */
 /* If gdbserver_deliver_signal True, then gdb did not ask
    to ignore the signal, so signal can be delivered to the guest. */
-extern Bool gdbserver_deliver_signal (Int sigNo);
+extern Bool gdbserver_deliver_signal (Int vki_sigNo);
+
+/* Called when a process is about to go with reason ('W' or 'X') and code.
+   This sets global variables that will be used to return the process
+   exit status to GDB in the next resume_reply.
+   Similarly to gdbserver_signal_encountered, a call to call_gdbserver
+   is needed to send the resume reply. */
+extern void gdbserver_process_exit_encountered (unsigned char status, Int code);
 
 /* To optimise signal handling, gdb can instruct gdbserver to
-   not stop on some signals. In the below, a 1 indicates the signal
+   not stop on some signals. In the below, a 1 indicates the gdb_nr signal
    has to be passed directly to the guest, without asking gdb.
    A 0 indicates gdb has to be consulted to see if signal has
    or has not to be passed. The gdb consultation is to
    be done using the above two functions. */
-extern int pass_signals[];
+extern int pass_signals[]; /* indexed by gdb signal nr */
 
 
 #include "target.h"
 
 /* Target-specific functions */
-
-void initialize_low (void);
-
-/* initialize or re-initialize the register set of the low target.
-   if shadow_mode, then (re-)define the normal and valgrind shadow registers
-   else (re-)define only the normal registers. */
-void initialize_shadow_low (Bool shadow_mode);
 
 /* From inferiors.c.  */
 
@@ -303,14 +281,14 @@ extern Bool noack_mode;
 int putpkt (char *buf);
 int putpkt_binary (char *buf, int len);
 int getpkt (char *buf);
-void remote_open (char *name);
+void remote_open (const HChar *name);
 void remote_close (void);
 
 void sync_gdb_connection (void);
 void write_ok (char *buf);
 void write_enn (char *buf);
-void convert_ascii_to_int (char *from, unsigned char *to, int n);
-void convert_int_to_ascii (unsigned char *from, char *to, int n);
+void convert_ascii_to_int (const char *from, unsigned char *to, int n);
+void convert_int_to_ascii (const unsigned char *from, char *to, int n);
 void prepare_resume_reply (char *buf, char status, unsigned char sig);
 
 void decode_address (CORE_ADDR *addrp, const char *start, int len);
@@ -323,6 +301,14 @@ int decode_X_packet (char *from, int packet_len, CORE_ADDR * mem_addr_ptr,
 
 int unhexify (char *bin, const char *hex, int count);
 int hexify (char *hex, const char *bin, int count);
+/* heximage builds an image of bin according to byte order of the architecture 
+   Useful for register and int image */
+char* heximage (char *buf, char *bin, int count);
+
+/* convert from CORE_ADDR to void* */
+void* C2v(CORE_ADDR addr);
+
+
 int remote_escape_output (const gdb_byte *buffer, int len,
 			  gdb_byte *out_buf, int *out_len,
 			  int out_maxlen);
@@ -331,14 +317,14 @@ int remote_escape_output (const gdb_byte *buffer, int len,
 enum target_signal target_signal_from_host (int hostsig);
 int target_signal_to_host_p (enum target_signal oursig);
 int target_signal_to_host (enum target_signal oursig);
-char *target_signal_to_name (enum target_signal);
+const char *target_signal_to_name (enum target_signal);
 
 /* Functions from utils.c */
 
 /* error is like VG_(umsg), then VG_MINIMAL_LONGJMP to gdbserver toplevel. */
 void error (const char *string,...) ATTR_NORETURN ATTR_FORMAT (printf, 1, 2);
 /* first output a description of the error inside sr, then like VG_(umsg). */
-void sr_perror (SysRes sr,char *string,...) ATTR_FORMAT (printf, 2, 3);
+void sr_perror (SysRes sr,const char *string,...) ATTR_FORMAT (printf, 2, 3);
 /* fatal is like VG_(umsg), then exit(1). */
 void fatal (const char *string,...) ATTR_NORETURN ATTR_FORMAT (printf, 1, 2);
 /* warning is like VG_(umsg). */

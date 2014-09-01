@@ -6,11 +6,9 @@ Author: Pierre Habouzit <madcoder@debian.org>
 Reviewed-by: Alessandro Ghedini <ghedo@debian.org>
 Last-Update: 2012-05-10
 
-diff --git a/coregrind/m_commandline.c b/coregrind/m_commandline.c
-index 161e571..3aff3cd 100644
 --- a/coregrind/m_commandline.c
 +++ b/coregrind/m_commandline.c
-@@ -96,14 +96,27 @@ static void add_args_from_string ( HChar* s )
+@@ -96,14 +96,27 @@
  {
     HChar* tmp;
     HChar* cp = s;

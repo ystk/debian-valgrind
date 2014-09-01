@@ -7,7 +7,7 @@
    This file is part of Valgrind, a dynamic binary instrumentation
    framework.
 
-   Copyright (C) 2005-2011 Julian Seward
+   Copyright (C) 2005-2013 Julian Seward
       jseward@acm.org
 
    This program is free software; you can redistribute it and/or
@@ -360,6 +360,7 @@ struct vki_sigcontext {
 // From linux-2.6.13/include/asm-ppc64/fcntl.h
 //----------------------------------------------------------------------
 
+#define VKI_O_ACCMODE	         03
 #define VKI_O_RDONLY             00
 #define VKI_O_WRONLY             01
 #define VKI_O_RDWR               02
@@ -386,6 +387,18 @@ struct vki_sigcontext {
 #define VKI_F_SETSIG        10      /*  for sockets. */
 #define VKI_F_GETSIG        11      /*  for sockets. */
 
+#define VKI_F_SETOWN_EX		15
+#define VKI_F_GETOWN_EX		16
+
+#define VKI_F_OWNER_TID		0
+#define VKI_F_OWNER_PID		1
+#define VKI_F_OWNER_PGRP	2
+
+struct vki_f_owner_ex {
+	int	type;
+	__vki_kernel_pid_t	pid;
+};
+
 /* for F_[GET|SET]FL */
 #define VKI_FD_CLOEXEC  1  /* actually anything with low bit set goes */
 
@@ -409,6 +422,8 @@ struct vki_sigcontext {
 #define VKI_SOL_SOCKET      1
 
 #define VKI_SO_TYPE         3
+
+#define VKI_SO_ATTACH_FILTER	26
 
 //----------------------------------------------------------------------
 // From linux-2.6.13/include/asm-ppc64/sockios.h
@@ -588,6 +603,9 @@ struct vki_termios {
 //----------------------------------------------------------------------
 // From linux-2.6.13/include/asm-ppc64/ioctls.h
 //----------------------------------------------------------------------
+
+#define VKI_FIOCLEX         _VKI_IO('f', 1)
+#define VKI_FIONCLEX        _VKI_IO('f', 2)
 
 #define VKI_TCGETS          _VKI_IOR('t', 19, struct vki_termios)
 #define VKI_TCSETS          _VKI_IOW('t', 20, struct vki_termios)

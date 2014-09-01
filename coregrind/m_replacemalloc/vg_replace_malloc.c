@@ -8,7 +8,7 @@
    This file is part of Valgrind, a dynamic binary instrumentation
    framework.
 
-   Copyright (C) 2000-2011 Julian Seward 
+   Copyright (C) 2000-2013 Julian Seward 
       jseward@acm.org
 
    This program is free software; you can redistribute it and/or
@@ -119,6 +119,9 @@ static inline void my_exit ( int x )
 #  if defined(VGPV_arm_linux_android)
    __asm__ __volatile__(".word 0xFFFFFFFF");
    while (1) {}
+#  elif defined(VGPV_x86_linux_android)
+   __asm__ __volatile__("ud2");
+   while (1) {}
 #  else
    extern __attribute__ ((__noreturn__)) void _exit(int status);
    _exit(x);
@@ -128,7 +131,7 @@ static inline void my_exit ( int x )
 /* Same problem with getpagesize. */
 static inline int my_getpagesize ( void )
 {
-#  if defined(VGPV_arm_linux_android)
+#  if defined(VGPV_arm_linux_android) || defined(VGPV_x86_linux_android)
    return 4096; /* kludge - link failure on Android, for some reason */
 #  else
    extern int getpagesize (void);
@@ -171,6 +174,7 @@ static UWord umulHW ( UWord u, UWord v )
 */
 static struct vg_mallocfunc_info info;
 static int init_done;
+#define DO_INIT if (UNLIKELY(!init_done)) init()
 
 /* Startup hook - called as init section */
 __attribute__((constructor))
@@ -191,6 +195,22 @@ static void init(void);
    replacing.
 */
 
+/* The replacement functions are running on the simulated CPU.
+   The code on the simulated CPU does not necessarily use
+   all arguments. E.g. args can be ignored and/or only given
+   to a NON SIMD call.
+   The definedness of such 'unused' arguments will not be verified
+   by memcheck.
+   A call to 'trigger_memcheck_error_if_undefined' allows 
+   memcheck to detect such errors for the otherwise unused args.
+   Apart of allowing memcheck to detect an error, the function
+   trigger_memcheck_error_if_undefined has no effect and
+   has a minimal cost for other tools replacing malloc functions.
+*/
+static inline void trigger_memcheck_error_if_undefined ( ULong x )
+{
+   if (x == 0) __asm__ __volatile__( "" ::: "memory" );
+}
 
 /*---------------------- malloc ----------------------*/
 
@@ -204,7 +224,8 @@ static void init(void);
    { \
       void* v; \
       \
-      if (!init_done) init(); \
+      DO_INIT; \
+      trigger_memcheck_error_if_undefined((ULong)n ); \
       MALLOC_TRACE(#fnname "(%llu)", (ULong)n ); \
       \
       v = (void*)VALGRIND_NON_SIMD_CALL1( info.tl_##vg_replacement, n ); \
@@ -219,7 +240,9 @@ static void init(void);
    { \
       void* v; \
       \
-      if (!init_done) init(); \
+      DO_INIT; \
+      trigger_memcheck_error_if_undefined((ULong)(UWord) zone);	\
+      trigger_memcheck_error_if_undefined((ULong) n); \
       MALLOC_TRACE(#fnname "(%p, %llu)", zone, (ULong)n ); \
       \
       v = (void*)VALGRIND_NON_SIMD_CALL1( info.tl_##vg_replacement, n ); \
@@ -239,7 +262,8 @@ static void init(void);
    { \
       void* v; \
       \
-      if (!init_done) init(); \
+      DO_INIT; \
+      trigger_memcheck_error_if_undefined((ULong) n); \
       MALLOC_TRACE(#fnname "(%llu)", (ULong)n );        \
       \
       v = (void*)VALGRIND_NON_SIMD_CALL1( info.tl_##vg_replacement, n ); \
@@ -256,15 +280,22 @@ static void init(void);
 
 // Each of these lines generates a replacement function:
 //     (from_so, from_fn,  v's replacement)
+// For some lines, we will also define a replacement function
+// whose only purpose is to be a soname synonym place holder
+// that can be replaced using --soname-synonyms.
+#define SO_SYN_MALLOC VG_SO_SYN(somalloc)
 
 // malloc
 #if defined(VGO_linux)
  ALLOC_or_NULL(VG_Z_LIBSTDCXX_SONAME, malloc,      malloc);
  ALLOC_or_NULL(VG_Z_LIBC_SONAME,      malloc,      malloc);
+ ALLOC_or_NULL(SO_SYN_MALLOC,         malloc,      malloc);
 
 #elif defined(VGO_darwin)
  ALLOC_or_NULL(VG_Z_LIBC_SONAME,      malloc,      malloc);
- ZONEALLOC_or_NULL(VG_Z_LIBC_SONAME, malloc_zone_malloc, malloc);
+ ALLOC_or_NULL(SO_SYN_MALLOC,         malloc,      malloc);
+ ZONEALLOC_or_NULL(VG_Z_LIBC_SONAME,  malloc_zone_malloc, malloc);
+ ZONEALLOC_or_NULL(SO_SYN_MALLOC,     malloc_zone_malloc, malloc);
 
 #endif
 
@@ -281,11 +312,13 @@ static void init(void);
  #if VG_WORDSIZE == 4
   ALLOC_or_BOMB(VG_Z_LIBSTDCXX_SONAME, _Znwj,          __builtin_new);
   ALLOC_or_BOMB(VG_Z_LIBC_SONAME,      _Znwj,          __builtin_new);
+  ALLOC_or_BOMB(SO_SYN_MALLOC,         _Znwj,          __builtin_new);
  #endif
  // operator new(unsigned long), GNU mangling
  #if VG_WORDSIZE == 8
   ALLOC_or_BOMB(VG_Z_LIBSTDCXX_SONAME, _Znwm,          __builtin_new);
   ALLOC_or_BOMB(VG_Z_LIBC_SONAME,      _Znwm,          __builtin_new);
+  ALLOC_or_BOMB(SO_SYN_MALLOC,         _Znwm,          __builtin_new);
  #endif
 
 #elif defined(VGO_darwin)
@@ -310,11 +343,13 @@ static void init(void);
  #if VG_WORDSIZE == 4
   ALLOC_or_NULL(VG_Z_LIBSTDCXX_SONAME, _ZnwjRKSt9nothrow_t,  __builtin_new);
   ALLOC_or_NULL(VG_Z_LIBC_SONAME,      _ZnwjRKSt9nothrow_t,  __builtin_new);
+  ALLOC_or_NULL(SO_SYN_MALLOC,         _ZnwjRKSt9nothrow_t,  __builtin_new);
  #endif
  // operator new(unsigned long, std::nothrow_t const&), GNU mangling
  #if VG_WORDSIZE == 8
   ALLOC_or_NULL(VG_Z_LIBSTDCXX_SONAME, _ZnwmRKSt9nothrow_t,  __builtin_new);
   ALLOC_or_NULL(VG_Z_LIBC_SONAME,      _ZnwmRKSt9nothrow_t,  __builtin_new);
+  ALLOC_or_NULL(SO_SYN_MALLOC,         _ZnwmRKSt9nothrow_t,  __builtin_new);
  #endif
 
 #elif defined(VGO_darwin)
@@ -342,11 +377,13 @@ static void init(void);
  #if VG_WORDSIZE == 4
   ALLOC_or_BOMB(VG_Z_LIBSTDCXX_SONAME, _Znaj,             __builtin_vec_new );
   ALLOC_or_BOMB(VG_Z_LIBC_SONAME,      _Znaj,             __builtin_vec_new );
+  ALLOC_or_BOMB(SO_SYN_MALLOC,         _Znaj,             __builtin_vec_new );
  #endif
  // operator new[](unsigned long), GNU mangling
  #if VG_WORDSIZE == 8
   ALLOC_or_BOMB(VG_Z_LIBSTDCXX_SONAME, _Znam,             __builtin_vec_new );
   ALLOC_or_BOMB(VG_Z_LIBC_SONAME,      _Znam,             __builtin_vec_new );
+  ALLOC_or_BOMB(SO_SYN_MALLOC,         _Znam,             __builtin_vec_new );
  #endif
 
 #elif defined(VGO_darwin)
@@ -371,11 +408,13 @@ static void init(void);
  #if VG_WORDSIZE == 4
   ALLOC_or_NULL(VG_Z_LIBSTDCXX_SONAME, _ZnajRKSt9nothrow_t, __builtin_vec_new );
   ALLOC_or_NULL(VG_Z_LIBC_SONAME,      _ZnajRKSt9nothrow_t, __builtin_vec_new );
+  ALLOC_or_NULL(SO_SYN_MALLOC,         _ZnajRKSt9nothrow_t, __builtin_vec_new );
  #endif
  // operator new[](unsigned long, std::nothrow_t const&), GNU mangling
  #if VG_WORDSIZE == 8
   ALLOC_or_NULL(VG_Z_LIBSTDCXX_SONAME, _ZnamRKSt9nothrow_t, __builtin_vec_new );
   ALLOC_or_NULL(VG_Z_LIBC_SONAME,      _ZnamRKSt9nothrow_t, __builtin_vec_new );
+  ALLOC_or_NULL(SO_SYN_MALLOC,         _ZnamRKSt9nothrow_t, __builtin_vec_new );
  #endif
 
 #elif defined(VGO_darwin)
@@ -403,7 +442,8 @@ static void init(void);
    void VG_REPLACE_FUNCTION_EZU(10040,soname,fnname) (void *zone, void *p); \
    void VG_REPLACE_FUNCTION_EZU(10040,soname,fnname) (void *zone, void *p)  \
    { \
-      if (!init_done) init(); \
+      DO_INIT; \
+      trigger_memcheck_error_if_undefined((ULong)(UWord) zone);	\
       MALLOC_TRACE(#fnname "(%p, %p)\n", zone, p ); \
       if (p == NULL)  \
          return; \
@@ -415,20 +455,24 @@ static void init(void);
    void VG_REPLACE_FUNCTION_EZU(10050,soname,fnname) (void *p); \
    void VG_REPLACE_FUNCTION_EZU(10050,soname,fnname) (void *p)  \
    { \
-      if (!init_done) init(); \
+      DO_INIT; \
       MALLOC_TRACE(#fnname "(%p)\n", p ); \
       if (p == NULL)  \
          return; \
       (void)VALGRIND_NON_SIMD_CALL1( info.tl_##vg_replacement, p ); \
    }
 
+
 #if defined(VGO_linux)
  FREE(VG_Z_LIBSTDCXX_SONAME,  free,                 free );
  FREE(VG_Z_LIBC_SONAME,       free,                 free );
+ FREE(SO_SYN_MALLOC,          free,                 free );
 
 #elif defined(VGO_darwin)
  FREE(VG_Z_LIBC_SONAME,       free,                 free );
+ FREE(SO_SYN_MALLOC,          free,                 free );
  ZONEFREE(VG_Z_LIBC_SONAME,   malloc_zone_free,     free );
+ ZONEFREE(SO_SYN_MALLOC,      malloc_zone_free,     free );
 
 #endif
 
@@ -439,6 +483,7 @@ static void init(void);
 #if defined(VGO_linux)
  FREE(VG_Z_LIBSTDCXX_SONAME,  cfree,                free );
  FREE(VG_Z_LIBC_SONAME,       cfree,                free );
+ FREE(SO_SYN_MALLOC,          cfree,                free );
 
 #elif defined(VGO_darwin)
  //FREE(VG_Z_LIBSTDCXX_SONAME,  cfree,                free );
@@ -456,6 +501,7 @@ static void init(void);
  // operator delete(void*), GNU mangling
  FREE(VG_Z_LIBSTDCXX_SONAME,  _ZdlPv,               __builtin_delete );
  FREE(VG_Z_LIBC_SONAME,       _ZdlPv,               __builtin_delete );
+ FREE(SO_SYN_MALLOC,          _ZdlPv,               __builtin_delete );
 
 #elif defined(VGO_darwin)
  // operator delete(void*), GNU mangling
@@ -471,6 +517,7 @@ static void init(void);
  // operator delete(void*, std::nothrow_t const&), GNU mangling
  FREE(VG_Z_LIBSTDCXX_SONAME, _ZdlPvRKSt9nothrow_t,  __builtin_delete );
  FREE(VG_Z_LIBC_SONAME,      _ZdlPvRKSt9nothrow_t,  __builtin_delete );
+ FREE(SO_SYN_MALLOC,         _ZdlPvRKSt9nothrow_t,  __builtin_delete );
 
 #elif defined(VGO_darwin)
  // operator delete(void*, std::nothrow_t const&), GNU mangling
@@ -489,6 +536,7 @@ static void init(void);
  // operator delete[](void*), GNU mangling
  FREE(VG_Z_LIBSTDCXX_SONAME,  _ZdaPv,               __builtin_vec_delete );
  FREE(VG_Z_LIBC_SONAME,       _ZdaPv,               __builtin_vec_delete );
+ FREE(SO_SYN_MALLOC,          _ZdaPv,               __builtin_vec_delete );
 
 #elif defined(VGO_darwin)
  // operator delete[](void*), not mangled (for gcc 2.96)
@@ -507,6 +555,7 @@ static void init(void);
  // operator delete[](void*, std::nothrow_t const&), GNU mangling
  FREE(VG_Z_LIBSTDCXX_SONAME,  _ZdaPvRKSt9nothrow_t, __builtin_vec_delete );
  FREE(VG_Z_LIBC_SONAME,       _ZdaPvRKSt9nothrow_t, __builtin_vec_delete );
+ FREE(SO_SYN_MALLOC,          _ZdaPvRKSt9nothrow_t, __builtin_vec_delete );
 
 #elif defined(VGO_darwin)
  // operator delete[](void*, std::nothrow_t const&), GNU mangling
@@ -527,7 +576,10 @@ static void init(void);
    { \
       void* v; \
       \
-      if (!init_done) init(); \
+      DO_INIT; \
+      trigger_memcheck_error_if_undefined((ULong)(UWord) zone); \
+      trigger_memcheck_error_if_undefined((ULong) nmemb); \
+      trigger_memcheck_error_if_undefined((ULong) size); \
       MALLOC_TRACE("zone_calloc(%p, %llu,%llu)", zone, (ULong)nmemb, (ULong)size ); \
       \
       v = (void*)VALGRIND_NON_SIMD_CALL2( info.tl_calloc, nmemb, size ); \
@@ -544,7 +596,7 @@ static void init(void);
    { \
       void* v; \
       \
-      if (!init_done) init(); \
+      DO_INIT; \
       MALLOC_TRACE("calloc(%llu,%llu)", (ULong)nmemb, (ULong)size ); \
       \
       /* Protect against overflow.  See bug 24078. (that bug number is
@@ -564,10 +616,13 @@ static void init(void);
 
 #if defined(VGO_linux)
  CALLOC(VG_Z_LIBC_SONAME, calloc);
+ CALLOC(SO_SYN_MALLOC,    calloc);
 
 #elif defined(VGO_darwin)
  CALLOC(VG_Z_LIBC_SONAME, calloc);
+ CALLOC(SO_SYN_MALLOC,    calloc);
  ZONECALLOC(VG_Z_LIBC_SONAME, malloc_zone_calloc);
+ ZONECALLOC(SO_SYN_MALLOC,    malloc_zone_calloc);
 
 #endif
 
@@ -583,7 +638,7 @@ static void init(void);
    { \
       void* v; \
       \
-      if (!init_done) init(); \
+      DO_INIT; \
       MALLOC_TRACE("zone_realloc(%p,%p,%llu)", zone, ptrV, (ULong)new_size ); \
       \
       if (ptrV == NULL) \
@@ -610,7 +665,7 @@ static void init(void);
    { \
       void* v; \
       \
-      if (!init_done) init(); \
+      DO_INIT; \
       MALLOC_TRACE("realloc(%p,%llu)", ptrV, (ULong)new_size ); \
       \
       if (ptrV == NULL) \
@@ -630,10 +685,13 @@ static void init(void);
 
 #if defined(VGO_linux)
  REALLOC(VG_Z_LIBC_SONAME, realloc);
+ REALLOC(SO_SYN_MALLOC,    realloc);
 
 #elif defined(VGO_darwin)
  REALLOC(VG_Z_LIBC_SONAME, realloc);
+ REALLOC(SO_SYN_MALLOC,    realloc);
  ZONEREALLOC(VG_Z_LIBC_SONAME, malloc_zone_realloc);
+ ZONEREALLOC(SO_SYN_MALLOC,    malloc_zone_realloc);
 
 #endif
 
@@ -649,7 +707,9 @@ static void init(void);
    { \
       void* v; \
       \
-      if (!init_done) init(); \
+      DO_INIT; \
+      trigger_memcheck_error_if_undefined((ULong)(UWord) zone);	\
+      trigger_memcheck_error_if_undefined((ULong) n); \
       MALLOC_TRACE("zone_memalign(%p, al %llu, size %llu)", \
                    zone, (ULong)alignment, (ULong)n );  \
       \
@@ -674,7 +734,8 @@ static void init(void);
    { \
       void* v; \
       \
-      if (!init_done) init(); \
+      DO_INIT; \
+      trigger_memcheck_error_if_undefined((ULong) n); \
       MALLOC_TRACE("memalign(al %llu, size %llu)", \
                    (ULong)alignment, (ULong)n ); \
       \
@@ -692,10 +753,13 @@ static void init(void);
 
 #if defined(VGO_linux)
  MEMALIGN(VG_Z_LIBC_SONAME, memalign);
+ MEMALIGN(SO_SYN_MALLOC,    memalign);
 
 #elif defined(VGO_darwin)
  MEMALIGN(VG_Z_LIBC_SONAME, memalign);
+ MEMALIGN(SO_SYN_MALLOC,    memalign);
  ZONEMEMALIGN(VG_Z_LIBC_SONAME, malloc_zone_memalign);
+ ZONEMEMALIGN(SO_SYN_MALLOC,    malloc_zone_memalign);
 
 #endif
 
@@ -724,16 +788,20 @@ static void init(void);
       static int pszB = 0; \
       if (pszB == 0) \
          pszB = my_getpagesize(); \
+      trigger_memcheck_error_if_undefined((ULong)(UWord) zone);	      \
       return VG_REPLACE_FUNCTION_EZU(10110,VG_Z_LIBC_SONAME,memalign) \
                 ((SizeT)pszB, size); \
    }
 
 #if defined(VGO_linux)
  VALLOC(VG_Z_LIBC_SONAME, valloc);
+ VALLOC(SO_SYN_MALLOC, valloc);
 
 #elif defined(VGO_darwin)
  VALLOC(VG_Z_LIBC_SONAME, valloc);
+ VALLOC(SO_SYN_MALLOC, valloc);
  ZONEVALLOC(VG_Z_LIBC_SONAME, malloc_zone_valloc);
+ ZONEVALLOC(SO_SYN_MALLOC,    malloc_zone_valloc);
 
 #endif
 
@@ -749,11 +817,14 @@ static void init(void);
    { \
       /* In glibc-2.2.4, 1 denotes a successful return value for \
          mallopt */ \
+      trigger_memcheck_error_if_undefined((ULong) cmd); \
+      trigger_memcheck_error_if_undefined((ULong) value); \
       return 1; \
    }
 
 #if defined(VGO_linux)
  MALLOPT(VG_Z_LIBC_SONAME, mallopt);
+ MALLOPT(SO_SYN_MALLOC,    mallopt);
 
 #elif defined(VGO_darwin)
  //MALLOPT(VG_Z_LIBC_SONAME, mallopt);
@@ -791,11 +862,13 @@ static void init(void);
    { \
       /* 0 denotes that malloc_trim() either wasn't able \
          to do anything, or was not implemented */ \
+      trigger_memcheck_error_if_undefined((ULong) pad); \
       return 0; \
    }
 
 #if defined(VGO_linux)
  MALLOC_TRIM(VG_Z_LIBC_SONAME, malloc_trim);
+ MALLOC_TRIM(SO_SYN_MALLOC,    malloc_trim);
 
 #elif defined(VGO_darwin)
  //MALLOC_TRIM(VG_Z_LIBC_SONAME, malloc_trim);
@@ -833,6 +906,7 @@ static void init(void);
 
 #if defined(VGO_linux)
  POSIX_MEMALIGN(VG_Z_LIBC_SONAME, posix_memalign);
+ POSIX_MEMALIGN(SO_SYN_MALLOC,    posix_memalign);
 
 #elif defined(VGO_darwin)
  //POSIX_MEMALIGN(VG_Z_LIBC_SONAME, posix_memalign);
@@ -849,7 +923,7 @@ static void init(void);
    {  \
       SizeT pszB; \
       \
-      if (!init_done) init(); \
+      DO_INIT; \
       MALLOC_TRACE("malloc_usable_size(%p)", p ); \
       if (NULL == p) \
          return 0; \
@@ -862,11 +936,18 @@ static void init(void);
 
 #if defined(VGO_linux)
  MALLOC_USABLE_SIZE(VG_Z_LIBC_SONAME, malloc_usable_size);
+ MALLOC_USABLE_SIZE(SO_SYN_MALLOC,    malloc_usable_size);
  MALLOC_USABLE_SIZE(VG_Z_LIBC_SONAME, malloc_size);
+ MALLOC_USABLE_SIZE(SO_SYN_MALLOC,    malloc_size);
+# if defined(VGPV_arm_linux_android) || defined(VGPV_x86_linux_android)
+  MALLOC_USABLE_SIZE(VG_Z_LIBC_SONAME, dlmalloc_usable_size);
+  MALLOC_USABLE_SIZE(SO_SYN_MALLOC,    dlmalloc_usable_size);
+# endif
 
 #elif defined(VGO_darwin)
  //MALLOC_USABLE_SIZE(VG_Z_LIBC_SONAME, malloc_usable_size);
  MALLOC_USABLE_SIZE(VG_Z_LIBC_SONAME, malloc_size);
+ MALLOC_USABLE_SIZE(SO_SYN_MALLOC,    malloc_size);
 
 #endif
 
@@ -913,6 +994,7 @@ static void panic(const char *str)
 
 #if defined(VGO_linux)
  MALLOC_STATS(VG_Z_LIBC_SONAME, malloc_stats);
+ MALLOC_STATS(SO_SYN_MALLOC,    malloc_stats);
 
 #elif defined(VGO_darwin)
  //MALLOC_STATS(VG_Z_LIBC_SONAME, malloc_stats);
@@ -931,7 +1013,7 @@ static void panic(const char *str)
    struct vg_mallinfo VG_REPLACE_FUNCTION_EZU(10200,soname,fnname) ( void ) \
    { \
       static struct vg_mallinfo mi; \
-      if (!init_done) init(); \
+      DO_INIT; \
       MALLOC_TRACE("mallinfo()\n"); \
       (void)VALGRIND_NON_SIMD_CALL1( info.mallinfo, &mi ); \
       return mi; \
@@ -939,6 +1021,7 @@ static void panic(const char *str)
 
 #if defined(VGO_linux)
  MALLINFO(VG_Z_LIBC_SONAME, mallinfo);
+ MALLINFO(SO_SYN_MALLOC,    mallinfo);
 
 #elif defined(VGO_darwin)
  //MALLINFO(VG_Z_LIBC_SONAME, mallinfo);
@@ -950,10 +1033,25 @@ static void panic(const char *str)
 
 #if defined(VGO_darwin)
 
+static size_t my_malloc_size ( void* zone, void* ptr )
+{
+   /* Implement "malloc_size" by handing the request through to the
+      tool's .tl_usable_size method. */
+   DO_INIT;
+   trigger_memcheck_error_if_undefined((ULong)(UWord) zone);
+   trigger_memcheck_error_if_undefined((ULong)(UWord) ptr);
+   size_t res = (size_t)VALGRIND_NON_SIMD_CALL1(
+                           info.tl_malloc_usable_size, ptr);
+   return res;
+}
+
+/* Note that the (void*) casts below are a kludge which stops
+   compilers complaining about the fact that the the replacement
+   functions aren't really of the right type. */
 static vki_malloc_zone_t vg_default_zone = {
     NULL, // reserved1
     NULL, // reserved2
-    NULL, // GrP fixme: malloc_size
+    (void*)my_malloc_size, // JRS fixme: is this right?
     (void*)VG_REPLACE_FUNCTION_EZU(10020,VG_Z_LIBC_SONAME,malloc_zone_malloc), 
     (void*)VG_REPLACE_FUNCTION_EZU(10060,VG_Z_LIBC_SONAME,malloc_zone_calloc), 
     (void*)VG_REPLACE_FUNCTION_EZU(10130,VG_Z_LIBC_SONAME,malloc_zone_valloc), 
@@ -980,6 +1078,7 @@ static vki_malloc_zone_t vg_default_zone = {
    }
 
 DEFAULT_ZONE(VG_Z_LIBC_SONAME, malloc_default_zone);
+DEFAULT_ZONE(SO_SYN_MALLOC,    malloc_default_zone);
 
 
 #define ZONE_FROM_PTR(soname, fnname) \
@@ -991,6 +1090,7 @@ DEFAULT_ZONE(VG_Z_LIBC_SONAME, malloc_default_zone);
    }
 
 ZONE_FROM_PTR(VG_Z_LIBC_SONAME, malloc_zone_from_ptr);
+ZONE_FROM_PTR(SO_SYN_MALLOC,    malloc_zone_from_ptr);
 
 
 // GrP fixme bypass libc's use of zone->introspect->check
@@ -999,6 +1099,7 @@ ZONE_FROM_PTR(VG_Z_LIBC_SONAME, malloc_zone_from_ptr);
    int VG_REPLACE_FUNCTION_EZU(10230,soname,fnname)(void* zone); \
    int VG_REPLACE_FUNCTION_EZU(10230,soname,fnname)(void* zone)  \
    { \
+      trigger_memcheck_error_if_undefined((ULong) zone); \
       return 1; \
    }
 

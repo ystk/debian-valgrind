@@ -1,8 +1,7 @@
-/* -*- mode: C; c-basic-offset: 3; indent-tabs-mode: nil; -*- */
 /*
   This file is part of drd, a thread error detector.
 
-  Copyright (C) 2006-2011 Bart Van Assche <bvanassche@acm.org>.
+  Copyright (C) 2006-2013 Bart Van Assche <bvanassche@acm.org>.
 
   This program is free software; you can redistribute it and/or
   modify it under the terms of the GNU General Public License as
@@ -61,12 +60,13 @@ static Bool s_print_stats;
 static Bool s_var_info;
 static Bool s_show_stack_usage;
 static Bool s_trace_alloc;
+static Bool trace_sectsuppr;
 
 
 /**
  * Implement the needs_command_line_options for drd.
  */
-static Bool DRD_(process_cmd_line_option)(Char* arg)
+static Bool DRD_(process_cmd_line_option)(const HChar* arg)
 {
    int check_stack_accesses   = -1;
    int join_list_vol          = -1;
@@ -90,7 +90,8 @@ static Bool DRD_(process_cmd_line_option)(Char* arg)
    int trace_segment          = -1;
    int trace_semaphore        = -1;
    int trace_suppression      = -1;
-   Char* trace_address        = 0;
+   const HChar* trace_address = 0;
+   const HChar* ptrace_address= 0;
 
    if      VG_BOOL_CLO(arg, "--check-stack-var",     check_stack_accesses) {}
    else if VG_INT_CLO (arg, "--join-list-vol",       join_list_vol) {}
@@ -115,11 +116,13 @@ static Bool DRD_(process_cmd_line_option)(Char* arg)
    else if VG_BOOL_CLO(arg, "--trace-hb",            trace_hb) {}
    else if VG_BOOL_CLO(arg, "--trace-mutex",         trace_mutex) {}
    else if VG_BOOL_CLO(arg, "--trace-rwlock",        trace_rwlock) {}
+   else if VG_BOOL_CLO(arg, "--trace-sectsuppr",     trace_sectsuppr) {}
    else if VG_BOOL_CLO(arg, "--trace-segment",       trace_segment) {}
    else if VG_BOOL_CLO(arg, "--trace-semaphore",     trace_semaphore) {}
    else if VG_BOOL_CLO(arg, "--trace-suppr",         trace_suppression) {}
    else if VG_BOOL_CLO(arg, "--var-info",            s_var_info) {}
    else if VG_INT_CLO (arg, "--exclusive-threshold", exclusive_threshold_ms) {}
+   else if VG_STR_CLO (arg, "--ptrace-addr",         ptrace_address) {}
    else if VG_INT_CLO (arg, "--shared-threshold",    shared_threshold_ms)    {}
    else if VG_STR_CLO (arg, "--trace-addr",          trace_address) {}
    else
@@ -152,10 +155,13 @@ static Bool DRD_(process_cmd_line_option)(Char* arg)
       DRD_(thread_set_segment_merge_interval)(segment_merge_interval);
    if (show_confl_seg != -1)
       DRD_(set_show_conflicting_segments)(show_confl_seg);
-   if (trace_address)
-   {
+   if (trace_address) {
       const Addr addr = VG_(strtoll16)(trace_address, 0);
-      DRD_(start_tracing_address_range)(addr, addr + 1);
+      DRD_(start_tracing_address_range)(addr, addr + 1, False);
+   }
+   if (ptrace_address) {
+      const Addr addr = VG_(strtoll16)(ptrace_address, 0);
+      DRD_(start_tracing_address_range)(addr, addr + 1, True);
    }
    if (trace_barrier != -1)
       DRD_(barrier_set_trace)(trace_barrier);
@@ -218,7 +224,11 @@ static void DRD_(print_usage)(void)
 "    --show-stack-usage=yes|no Print stack usage at thread exit time [no].\n"
 "\n"
 "  drd options for monitoring process behavior:\n"
-"    --trace-addr=<address>    Trace all load and store activity for the.\n"
+"    --ptrace-addr=<address>   Trace all load and store activity for the\n"
+"                              specified address and keep doing that even after\n"
+"                              the memory at that address has been freed and\n"
+"                              reallocated [off].\n"
+"    --trace-addr=<address>    Trace all load and store activity for the\n"
 "                              specified address [off].\n"
 "    --trace-alloc=yes|no      Trace all memory allocations and deallocations\n""                              [no].\n"
 "    --trace-barrier=yes|no    Trace all barrier activity [no].\n"
@@ -242,6 +252,8 @@ static void DRD_(print_debug_usage)(void)
 "    --trace-conflict-set-bm=yes|no Trace all conflict set bitmap\n"
 "                              updates [no]. Note: enabling this option\n"
 "                              will generate a lot of output !\n"
+"    --trace-sectsuppr=yes|no  Trace which the dynamic library sections on\n"
+"                              which data race detection is suppressed.\n"
 "    --trace-segment=yes|no    Trace segment actions [no].\n"
 "    --trace-suppr=yes|no      Trace all address suppression actions [no].\n"
 );
@@ -254,7 +266,7 @@ static void DRD_(print_debug_usage)(void)
 
 static void drd_pre_mem_read(const CorePart part,
                              const ThreadId tid,
-                             Char* const s,
+                             const HChar* const s,
                              const Addr a,
                              const SizeT size)
 {
@@ -266,10 +278,10 @@ static void drd_pre_mem_read(const CorePart part,
 
 static void drd_pre_mem_read_asciiz(const CorePart part,
                                     const ThreadId tid,
-                                    Char* const s,
+                                    const HChar* const s,
                                     const Addr a)
 {
-   const char* p = (void*)a;
+   const HChar* p = (void*)a;
    SizeT size = 0;
 
    // Don't segfault if the string starts in an obviously stupid
@@ -322,7 +334,7 @@ void drd_start_using_mem(const Addr a1, const SizeT len,
 
    if (UNLIKELY(DRD_(any_address_is_traced)()))
    {
-      DRD_(trace_mem_access)(a1, len, eStart);
+      DRD_(trace_mem_access)(a1, len, eStart, 0, 0);
    }
 
    if (UNLIKELY(DRD_(running_thread_inside_pthread_create)()))
@@ -354,7 +366,7 @@ void drd_stop_using_mem(const Addr a1, const SizeT len,
    tl_assert(a1 <= a2);
 
    if (UNLIKELY(DRD_(any_address_is_traced)()))
-      DRD_(trace_mem_access)(a1, len, eEnd);
+      DRD_(trace_mem_access)(a1, len, eEnd, 0, 0);
 
    if (!is_stack_mem && s_trace_alloc)
       DRD_(trace_msg)("Stopped using memory range 0x%lx + %ld",
@@ -389,7 +401,7 @@ void DRD_(clean_memory)(const Addr a1, const SizeT len)
 }
 
 /**
- * Suppress data race reports on all addresses contained in .plt and
+ * Suppress data race reports on all addresses contained in .plt, .got and
  * .got.plt sections inside the address range [ a, a + len [. The data in
  * these sections is modified by _dl_relocate_object() every time a function
  * in a shared library is called for the first time. Since the first call
@@ -397,28 +409,45 @@ void DRD_(clean_memory)(const Addr a1, const SizeT len)
  * such calls can cause conflicting accesses. See also Ulrich Drepper's
  * paper "How to Write Shared Libraries" for more information about relocation
  * (http://people.redhat.com/drepper/dsohowto.pdf).
+ * Note: the contents of the .got section is only modified by the MIPS resolver.
  */
 static void DRD_(suppress_relocation_conflicts)(const Addr a, const SizeT len)
 {
    const DebugInfo* di;
 
-#if 0
-   VG_(printf)("Evaluating range @ 0x%lx size %ld\n", a, len);
-#endif
+   if (trace_sectsuppr)
+      VG_(dmsg)("Evaluating range @ 0x%lx size %ld\n", a, len);
 
-   for (di = VG_(next_DebugInfo)(0); di; di = VG_(next_DebugInfo)(di))
-   {
+   for (di = VG_(next_DebugInfo)(0); di; di = VG_(next_DebugInfo)(di)) {
       Addr  avma;
       SizeT size;
+
+      if (trace_sectsuppr)
+	 VG_(dmsg)("Examining %s / %s\n", VG_(DebugInfo_get_filename)(di),
+		   VG_(DebugInfo_get_soname)(di));
+
+      /*
+       * Suppress the race report on the libpthread global variable
+       * __pthread_multiple_threads. See also
+       * http://bugs.kde.org/show_bug.cgi?id=323905.
+       */
+      avma = VG_(DebugInfo_get_bss_avma)(di);
+      size = VG_(DebugInfo_get_bss_size)(di);
+      tl_assert((avma && size) || (avma == 0 && size == 0));
+      if (size > 0 &&
+          VG_(strcmp)(VG_(DebugInfo_get_soname)(di), "libpthread.so.0") == 0) {
+	 if (trace_sectsuppr)
+	    VG_(dmsg)("Suppressing .bss @ 0x%lx size %ld\n", avma, size);
+         tl_assert(VG_(DebugInfo_sect_kind)(NULL, 0, avma) == Vg_SectBSS);
+         DRD_(start_suppression)(avma, avma + size, ".bss");
+      }
 
       avma = VG_(DebugInfo_get_plt_avma)(di);
       size = VG_(DebugInfo_get_plt_size)(di);
       tl_assert((avma && size) || (avma == 0 && size == 0));
-      if (size > 0)
-      {
-#if 0
-         VG_(printf)("Suppressing .plt @ 0x%lx size %ld\n", avma, size);
-#endif
+      if (size > 0) {
+	 if (trace_sectsuppr)
+	    VG_(dmsg)("Suppressing .plt @ 0x%lx size %ld\n", avma, size);
          tl_assert(VG_(DebugInfo_sect_kind)(NULL, 0, avma) == Vg_SectPLT);
          DRD_(start_suppression)(avma, avma + size, ".plt");
       }
@@ -426,13 +455,21 @@ static void DRD_(suppress_relocation_conflicts)(const Addr a, const SizeT len)
       avma = VG_(DebugInfo_get_gotplt_avma)(di);
       size = VG_(DebugInfo_get_gotplt_size)(di);
       tl_assert((avma && size) || (avma == 0 && size == 0));
-      if (size > 0)
-      {
-#if 0
-         VG_(printf)("Suppressing .got.plt @ 0x%lx size %ld\n", avma, size);
-#endif
+      if (size > 0) {
+	 if (trace_sectsuppr)
+	    VG_(dmsg)("Suppressing .got.plt @ 0x%lx size %ld\n", avma, size);
          tl_assert(VG_(DebugInfo_sect_kind)(NULL, 0, avma) == Vg_SectGOTPLT);
          DRD_(start_suppression)(avma, avma + size, ".gotplt");
+      }
+
+      avma = VG_(DebugInfo_get_got_avma)(di);
+      size = VG_(DebugInfo_get_got_size)(di);
+      tl_assert((avma && size) || (avma == 0 && size == 0));
+      if (size > 0) {
+	 if (trace_sectsuppr)
+	    VG_(dmsg)("Suppressing .got @ 0x%lx size %ld\n", avma, size);
+         tl_assert(VG_(DebugInfo_sect_kind)(NULL, 0, avma) == Vg_SectGOT);
+         DRD_(start_suppression)(avma, avma + size, ".got");
       }
    }
 }
@@ -449,29 +486,44 @@ void drd_start_using_mem_w_perms(const Addr a, const SizeT len,
    DRD_(suppress_relocation_conflicts)(a, len);
 }
 
-/* Called by the core when the stack of a thread grows, to indicate that */
-/* the addresses in range [ a, a + len [ may now be used by the client.  */
-/* Assumption: stacks grow downward.                                     */
+/**
+ * Called by the core when the stack of a thread grows, to indicate that
+ * the addresses in range [ a, a + len [ may now be used by the client.
+ * Assumption: stacks grow downward.
+ */
 static __inline__
-void drd_start_using_mem_stack(const Addr a, const SizeT len)
+void drd_start_using_mem_stack2(const DrdThreadId tid, const Addr a,
+                                const SizeT len)
 {
-   DRD_(thread_set_stack_min)(DRD_(thread_get_running_tid)(),
-                              a - VG_STACK_REDZONE_SZB);
-   drd_start_using_mem(a - VG_STACK_REDZONE_SZB,
-                       len + VG_STACK_REDZONE_SZB,
+   DRD_(thread_set_stack_min)(tid, a - VG_STACK_REDZONE_SZB);
+   drd_start_using_mem(a - VG_STACK_REDZONE_SZB, len + VG_STACK_REDZONE_SZB,
                        True);
 }
 
-/* Called by the core when the stack of a thread shrinks, to indicate that */
-/* the addresses [ a, a + len [ are no longer accessible for the client.   */
-/* Assumption: stacks grow downward.                                       */
+static __inline__
+void drd_start_using_mem_stack(const Addr a, const SizeT len)
+{
+   drd_start_using_mem_stack2(DRD_(thread_get_running_tid)(), a, len);
+}
+
+/**
+ * Called by the core when the stack of a thread shrinks, to indicate that
+ * the addresses [ a, a + len [ are no longer accessible for the client.
+ * Assumption: stacks grow downward.
+ */
+static __inline__
+void drd_stop_using_mem_stack2(const DrdThreadId tid, const Addr a,
+                               const SizeT len)
+{
+   DRD_(thread_set_stack_min)(tid, a + len - VG_STACK_REDZONE_SZB);
+   drd_stop_using_mem(a - VG_STACK_REDZONE_SZB, len + VG_STACK_REDZONE_SZB,
+                      True);
+}
+
 static __inline__
 void drd_stop_using_mem_stack(const Addr a, const SizeT len)
 {
-   DRD_(thread_set_stack_min)(DRD_(thread_get_running_tid)(),
-                              a + len - VG_STACK_REDZONE_SZB);
-   drd_stop_using_mem(a - VG_STACK_REDZONE_SZB, len + VG_STACK_REDZONE_SZB,
-                      True);
+   drd_stop_using_mem_stack2(DRD_(thread_get_running_tid)(), a, len);
 }
 
 static
@@ -546,8 +598,8 @@ void drd_post_deliver_signal(const ThreadId vg_tid, const Int sigNo)
  * Callback function called by the Valgrind core before a stack area is
  * being used by a signal handler.
  *
- * @param[in] a   Start of address range.
- * @param[in] len Address range length.
+ * @param[in] a   Start of address range - VG_STACK_REDZONE_SZB.
+ * @param[in] len Address range length + VG_STACK_REDZONE_SZB.
  * @param[in] tid Valgrind thread ID for whom the signal frame is being
  *                constructed.
  */
@@ -555,12 +607,14 @@ static void drd_start_using_mem_stack_signal(const Addr a, const SizeT len,
                                              ThreadId tid)
 {
    DRD_(thread_set_vg_running_tid)(VG_(get_running_tid)());
-   drd_start_using_mem(a, len, True);
+   drd_start_using_mem(a + VG_STACK_REDZONE_SZB, len - VG_STACK_REDZONE_SZB,
+                       True);
 }
 
 static void drd_stop_using_mem_stack_signal(Addr a, SizeT len)
 {
-   drd_stop_using_mem(a, len, True);
+   drd_stop_using_mem(a + VG_STACK_REDZONE_SZB, len - VG_STACK_REDZONE_SZB,
+                      True);
 }
 
 static
@@ -580,17 +634,24 @@ void drd_pre_thread_create(const ThreadId creator, const ThreadId created)
    }
 }
 
-/* Called by Valgrind's core before any loads or stores are performed on */
-/* the context of thread "created". At startup, this function is called  */
-/* with arguments (0,1).                                                 */
+/**
+ * Called by Valgrind's core before any loads or stores are performed on
+ * the context of thread "created".
+ */
 static
 void drd_post_thread_create(const ThreadId vg_created)
 {
    DrdThreadId drd_created;
+   Addr stack_max;
 
    tl_assert(vg_created != VG_INVALID_THREADID);
 
    drd_created = DRD_(thread_post_create)(vg_created);
+
+   /* Set up red zone before the code in glibc's clone.S is run. */
+   stack_max = DRD_(thread_get_stack_max)(drd_created);
+   drd_start_using_mem_stack2(drd_created, stack_max, 0);
+
    if (DRD_(thread_get_trace_fork_join)())
    {
       DRD_(trace_msg)("drd_post_thread_create created = %d", drd_created);
@@ -609,9 +670,15 @@ static void drd_thread_finished(ThreadId vg_tid)
 {
    DrdThreadId drd_tid;
 
-   tl_assert(VG_(get_running_tid)() == vg_tid);
+   /*
+    * Ignore if invoked because thread creation failed. See e.g.
+    * coregrind/m_syswrap/syswrap-amd64-linux.c
+    */
+   if (VG_(get_running_tid)() != vg_tid)
+      return;
 
    drd_tid = DRD_(VgThreadIdToDrdThreadId)(vg_tid);
+   tl_assert(drd_tid != DRD_INVALID_THREADID);
    if (DRD_(thread_get_trace_fork_join)())
    {
       DRD_(trace_msg)("drd_thread_finished tid = %d%s", drd_tid,
@@ -737,6 +804,8 @@ static void DRD_(fini)(Int exitcode)
                    DRD_(get_mutex_lock_count)());
       DRD_(print_malloc_stats)();
    }
+
+   DRD_(bm_module_cleanup)();
 }
 
 static
@@ -746,7 +815,7 @@ void drd_pre_clo_init(void)
    VG_(details_name)            ("drd");
    VG_(details_version)         (NULL);
    VG_(details_description)     ("a thread error detector");
-   VG_(details_copyright_author)("Copyright (C) 2006-2011, and GNU GPL'd,"
+   VG_(details_copyright_author)("Copyright (C) 2006-2013, and GNU GPL'd,"
                                  " by Bart Van Assche.");
    VG_(details_bug_reports_to)  (VG_BUGS_TO);
 
@@ -789,14 +858,18 @@ void drd_pre_clo_init(void)
    DRD_(register_malloc_wrappers)(drd_start_using_mem_w_ecu,
                                   drd_stop_using_nonstack_mem);
 
+   DRD_(bm_module_init)();
+
    DRD_(clientreq_init)();
 
    DRD_(suppression_init)();
 
    DRD_(clientobj_init)();
 
+   DRD_(thread_init)();
+
    {
-      Char* const smi = VG_(getenv)("DRD_SEGMENT_MERGING_INTERVAL");
+      HChar* const smi = VG_(getenv)("DRD_SEGMENT_MERGING_INTERVAL");
       if (smi)
          DRD_(thread_set_segment_merge_interval)(VG_(strtoll10)(smi, NULL));
    }

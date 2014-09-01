@@ -1,8 +1,7 @@
-/* -*- mode: C; c-basic-offset: 3; indent-tabs-mode: nil; -*- */
 /*
   This file is part of drd, a thread error detector.
 
-  Copyright (C) 2006-2011 Bart Van Assche <bvanassche@acm.org>.
+  Copyright (C) 2006-2013 Bart Van Assche <bvanassche@acm.org>.
 
   This program is free software; you can redistribute it and/or
   modify it under the terms of the GNU General Public License as
@@ -47,8 +46,8 @@ void DRD_(mutex_post_lock)(const Addr mutex, const Bool took_lock,
                            const Bool post_cond_wait);
 void DRD_(mutex_unlock)(const Addr mutex, const MutexT mutex_type);
 void DRD_(spinlock_init_or_unlock)(const Addr spinlock);
-const char* DRD_(mutex_get_typename)(struct mutex_info* const p);
-const char* DRD_(mutex_type_name)(const MutexT mt);
+const HChar* DRD_(mutex_get_typename)(struct mutex_info* const p);
+const HChar* DRD_(mutex_type_name)(const MutexT mt);
 Bool DRD_(mutex_is_locked_by)(const Addr mutex, const DrdThreadId tid);
 int DRD_(mutex_get_recursion_count)(const Addr mutex);
 ULong DRD_(get_mutex_lock_count)(void);

@@ -8,7 +8,7 @@
    This file is part of Valgrind, a dynamic binary instrumentation
    framework.
 
-   Copyright (C) 2006-2011 OpenWorks Ltd
+   Copyright (C) 2006-2013 OpenWorks Ltd
       info@open-works.co.uk
 
    This program is free software; you can redistribute it and/or
@@ -89,14 +89,8 @@ struct hacky_sigframe {
 static Bool extend ( ThreadState *tst, Addr addr, SizeT size )
 {
    ThreadId tid = tst->tid;
-   /* For tracking memory events, indicate the entire frame has been
-      allocated.  Except, don't mess with the area which
-      overlaps the previous frame's redzone. */
-   /* XXX is the following call really right?  compared with the
-      amd64-linux version, this doesn't appear to handle the redzone
-      in the same way. */
-   VG_TRACK( new_mem_stack_signal,
-             addr - VG_STACK_REDZONE_SZB, size, tid );
+   VG_TRACK( new_mem_stack_signal, addr - VG_STACK_REDZONE_SZB,
+             size + VG_STACK_REDZONE_SZB, tid );
    return True;
 }
 
@@ -124,12 +118,14 @@ void VG_(sigframe_create) ( ThreadId tid,
 
    sp_top_of_frame &= ~0xfUL;
    rsp = sp_top_of_frame - sizeof(struct hacky_sigframe);
+   rsp -= 8; /* ELF ABI says that rsp+8 must be 16 aligned on
+                entry to a function. */
 
    tst = VG_(get_ThreadState)(tid);
    if (!extend(tst, rsp, sp_top_of_frame - rsp))
       return;
 
-   vg_assert(VG_IS_16_ALIGNED(rsp));
+   vg_assert(VG_IS_16_ALIGNED(rsp+8));
 
    frame = (struct hacky_sigframe *) rsp;
 
@@ -182,7 +178,8 @@ void VG_(sigframe_create) ( ThreadId tid,
 
    if (VG_(clo_trace_signals))
       VG_(message)(Vg_DebugMsg,
-                   "sigframe_create (thread %d): next EIP=%#lx, next ESP=%#lx",
+                   "sigframe_create (thread %d): "
+                   "next EIP=%#lx, next ESP=%#lx\n",
                    tid, (Addr)handler, (Addr)frame );
 }
 
@@ -203,11 +200,14 @@ void VG_(sigframe_destroy)( ThreadId tid, Bool isRT )
    rsp = VG_(get_SP)(tid);
 
    /* why -8 ? because the signal handler's return will have popped
-      the return address of the stack; and the return address is the
+      the return address off the stack; and the return address is the
       lowest-addressed element of hacky_sigframe. */
    frame = (struct hacky_sigframe*)(rsp - 8);
    vg_assert(frame->magicPI == 0x31415927);
-   vg_assert(VG_IS_16_ALIGNED(frame));
+
+   /* This +8 is because of the -8 referred to in the ELF ABI comment
+      in VG_(sigframe_create) just above. */
+   vg_assert(VG_IS_16_ALIGNED((Addr)frame + 8));
 
    /* restore the entire guest state, and shadows, from the
       frame.  Note, as per comments above, this is a kludge - should
@@ -221,7 +221,8 @@ void VG_(sigframe_destroy)( ThreadId tid, Bool isRT )
 
    if (VG_(clo_trace_signals))
       VG_(message)(Vg_DebugMsg,
-                   "sigframe_destroy (thread %d): valid magic; next RIP=%#llx",
+                   "sigframe_destroy (thread %d): "
+                   "valid magic; next RIP=%#llx\n",
                    tid, tst->arch.vex.guest_RIP);
 
    VG_TRACK( die_mem_stack_signal, 

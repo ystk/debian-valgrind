@@ -6,7 +6,7 @@
    This file is part of Valgrind, a dynamic binary instrumentation
    framework.
 
-   Copyright (C) 2004-2011 OpenWorks LLP
+   Copyright (C) 2004-2013 OpenWorks LLP
       info@open-works.net
 
    This program is free software; you can redistribute it and/or
@@ -32,6 +32,8 @@
 #ifndef __VEX_GUEST_ARM_DEFS_H
 #define __VEX_GUEST_ARM_DEFS_H
 
+#include "libvex_basictypes.h"
+#include "guest_generic_bb_to_IR.h"     // DisResult
 
 /*---------------------------------------------------------*/
 /*--- arm to IR conversion                              ---*/
@@ -41,7 +43,6 @@
    bb_to_IR.h. */
 extern
 DisResult disInstr_ARM ( IRSB*        irbb,
-                         Bool         put_IP,
                          Bool         (*resteerOkFn) ( void*, Addr64 ),
                          Bool         resteerCisOk,
                          void*        callback_opaque,
@@ -51,11 +52,12 @@ DisResult disInstr_ARM ( IRSB*        irbb,
                          VexArch      guest_arch,
                          VexArchInfo* archinfo,
                          VexAbiInfo*  abiinfo,
-                         Bool         host_bigendian );
+                         Bool         host_bigendian,
+                         Bool         sigill_diag );
 
 /* Used by the optimiser to specialise calls to helpers. */
 extern
-IRExpr* guest_arm_spechelper ( HChar*   function_name,
+IRExpr* guest_arm_spechelper ( const HChar* function_name,
                                IRExpr** args,
                                IRStmt** precedingStmts,
                                Int      n_precedingStmts );
@@ -157,7 +159,7 @@ UInt armg_calculate_flag_qc ( UInt resL1, UInt resL2,
    OP                DEP1              DEP2              DEP3
    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-   OP_COPY           current NZCV      unused            unused
+   OP_COPY           curr_NZCV:28x0    unused            unused
    OP_ADD            argL              argR              unused
    OP_SUB            argL              argR              unused
    OP_ADC            argL              argR              31x0:old_C

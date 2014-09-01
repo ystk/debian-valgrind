@@ -8,7 +8,7 @@
    This file is part of Valgrind, a dynamic binary instrumentation
    framework.
 
-   Copyright (C) 2008-2011 OpenWorks LLP
+   Copyright (C) 2008-2013 OpenWorks LLP
       info@open-works.co.uk
 
    This program is free software; you can redistribute it and/or
@@ -38,6 +38,7 @@
 #include "pub_core_debuginfo.h"
 #include "pub_core_libcassert.h"
 #include "pub_core_libcprint.h"
+#include "pub_core_libcbase.h"
 #include "pub_core_options.h"
 #include "pub_core_xarray.h"
 
@@ -45,19 +46,20 @@
 #include "pub_core_aspacemgr.h" /* VG_(is_valid_for_client) */
 
 #include "priv_misc.h"
+#include "priv_image.h"
 #include "priv_d3basics.h"      /* self */
 #include "priv_storage.h"
 
-HChar* ML_(pp_DW_children) ( DW_children hashch )
+const HChar* ML_(pp_DW_children) ( DW_children hashch )
 {
    switch (hashch) {
       case DW_children_no:  return "no children";
       case DW_children_yes: return "has children";
-      default:              return "DW_children_???";
    }
+   return "DW_children_???";
 }
 
-HChar* ML_(pp_DW_TAG) ( DW_TAG tag )
+const HChar* ML_(pp_DW_TAG) ( DW_TAG tag )
 {
    switch (tag) {
       case DW_TAG_padding:            return "DW_TAG_padding";
@@ -148,11 +150,11 @@ HChar* ML_(pp_DW_TAG) ( DW_TAG tag )
       case DW_TAG_PGI_kanji_type:     return "DW_TAG_PGI_kanji_type";
       case DW_TAG_PGI_interface_block:
          return "DW_TAG_PGI_interface_block";
-      default:                        return "DW_TAG_???";
    }
+   return "DW_TAG_???";
 }
 
-HChar* ML_(pp_DW_FORM) ( DW_FORM form )
+const HChar* ML_(pp_DW_FORM) ( DW_FORM form )
 {
    switch (form) {
       case DW_FORM_addr:      return "DW_FORM_addr";
@@ -180,11 +182,13 @@ HChar* ML_(pp_DW_FORM) ( DW_FORM form )
       case DW_FORM_exprloc:   return "DW_FORM_exprloc";
       case DW_FORM_flag_present:return "DW_FORM_flag_present";
       case DW_FORM_ref_sig8:  return "DW_FORM_ref_sig8";
-      default:                return "DW_FORM_???";
+      case DW_FORM_GNU_ref_alt:return "DW_FORM_GNU_ref_alt";
+      case DW_FORM_GNU_strp_alt:return "DW_FORM_GNU_strp_alt";
    }
+   return "DW_FORM_???";
 }
 
-HChar* ML_(pp_DW_AT) ( DW_AT attr )
+const HChar* ML_(pp_DW_AT) ( DW_AT attr )
 {
    switch (attr) {
       case DW_AT_sibling:             return "DW_AT_sibling";
@@ -328,8 +332,8 @@ HChar* ML_(pp_DW_AT) ( DW_AT attr )
       case DW_AT_PGI_lbase: return "DW_AT_PGI_lbase";
       case DW_AT_PGI_soffset: return "DW_AT_PGI_soffset";
       case DW_AT_PGI_lstride: return "DW_AT_PGI_lstride";
-      default: return "DW_AT_???";
    }
+   return "DW_AT_???";
 }
 
 
@@ -410,6 +414,12 @@ static Bool get_Dwarf_Reg( /*OUT*/Addr* a, Word regno, RegSummary* regs )
 #  elif defined(VGP_s390x_linux)
    if (regno == 15) { *a = regs->sp; return True; }
    if (regno == 11) { *a = regs->fp; return True; }
+#  elif defined(VGP_mips32_linux)
+   if (regno == 29) { *a = regs->sp; return True; }
+   if (regno == 30) { *a = regs->fp; return True; }
+#  elif defined(VGP_mips64_linux)
+   if (regno == 29) { *a = regs->sp; return True; }
+   if (regno == 30) { *a = regs->fp; return True; }
 #  else
 #    error "Unknown platform"
 #  endif
@@ -1008,7 +1018,7 @@ GXResult ML_(evaluate_trivial_GX)( GExpr* gx, const DebugInfo* di )
    Word       i, nGuards;
    MaybeULong *mul, *mul2;
 
-   HChar*  badness = NULL;
+   const HChar*  badness = NULL;
    UChar*  p       = &gx->payload[0]; /* must remain unsigned */
    XArray* results = VG_(newXA)( ML_(dinfo_zalloc), "di.d3basics.etG.1",
                                  ML_(dinfo_free),

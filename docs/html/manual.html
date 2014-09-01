@@ -2,8 +2,8 @@
 <head>
 <meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1">
 <title>Valgrind User Manual</title>
-<link rel="stylesheet" href="vg_basic.css" type="text/css">
-<meta name="generator" content="DocBook XSL Stylesheets V1.75.2">
+<link rel="stylesheet" type="text/css" href="vg_basic.css">
+<meta name="generator" content="DocBook XSL Stylesheets V1.78.1">
 <link rel="home" href="index.html" title="Valgrind Documentation">
 <link rel="up" href="index.html" title="Valgrind Documentation">
 <link rel="prev" href="quick-start.html" title="The Valgrind Quick Start Guide">
@@ -17,22 +17,22 @@
 <th align="center" valign="middle">Valgrind Documentation</th>
 <td width="22px" align="center" valign="middle"><a accesskey="n" href="manual-intro.html"><img src="images/next.png" width="18" height="21" border="0" alt="Next"></a></td>
 </tr></table></div>
-<div class="book" title="Valgrind User Manual">
+<div class="book">
 <div class="titlepage">
 <div>
 <div><h1 class="title">
 <a name="manual"></a>Valgrind User Manual</h1></div>
-<div><p class="releaseinfo">Release 3.7.0 2 November 2011</p></div>
-<div><p class="copyright">Copyright © 2000-2011 <a class="ulink" href="http://www.valgrind.org/info/developers.html" target="_top">Valgrind Developers</a></p></div>
-<div><div class="legalnotice" title="Legal Notice">
-<a name="id406506"></a><p>Email: <a class="ulink" href="mailto:valgrind@valgrind.org" target="_top">valgrind@valgrind.org</a></p>
+<div><p class="releaseinfo">Release 3.9.0 31 October 2013</p></div>
+<div><p class="copyright">Copyright © 2000-2013 <a class="ulink" href="http://www.valgrind.org/info/developers.html" target="_top">Valgrind Developers</a></p></div>
+<div><div class="legalnotice">
+<a name="idp10563360"></a><p>Email: <a class="ulink" href="mailto:valgrind@valgrind.org" target="_top">valgrind@valgrind.org</a></p>
 </div></div>
 </div>
 <hr>
 </div>
 <div class="toc">
 <p><b>Table of Contents</b></p>
-<dl>
+<dl class="toc">
 <dt><span class="chapter"><a href="manual-intro.html">1. Introduction</a></span></dt>
 <dd><dl>
 <dt><span class="sect1"><a href="manual-intro.html#manual-intro.overview">1.1. An Overview of Valgrind</a></span></dt>
@@ -56,6 +56,7 @@
 <dt><span class="sect2"><a href="manual-core.html#manual-core.defopts">2.6.7. Setting Default Options</a></span></dt>
 </dl></dd>
 <dt><span class="sect1"><a href="manual-core.html#manual-core.pthreads">2.7. Support for Threads</a></span></dt>
+<dd><dl><dt><span class="sect2"><a href="manual-core.html#manual-core.pthreads_perf_sched">2.7.1. Scheduling and Multi-Thread Performance</a></span></dt></dl></dd>
 <dt><span class="sect1"><a href="manual-core.html#manual-core.signals">2.8. Handling of Signals</a></span></dt>
 <dt><span class="sect1"><a href="manual-core.html#manual-core.install">2.9. Building and Installing Valgrind</a></span></dt>
 <dt><span class="sect1"><a href="manual-core.html#manual-core.problems">2.10. If You Have Problems</a></span></dt>
@@ -147,18 +148,19 @@ function</a></span></dt>
 </dl></dd>
 <dt><span class="sect1"><a href="cg-manual.html#cg-manual.cgopts">5.3. Cachegrind Command-line Options</a></span></dt>
 <dt><span class="sect1"><a href="cg-manual.html#cg-manual.annopts">5.4. cg_annotate Command-line Options</a></span></dt>
-<dt><span class="sect1"><a href="cg-manual.html#cg-manual.diffopts">5.5. cg_diff Command-line Options</a></span></dt>
-<dt><span class="sect1"><a href="cg-manual.html#cg-manual.acting-on">5.6. Acting on Cachegrind's Information</a></span></dt>
-<dt><span class="sect1"><a href="cg-manual.html#cg-manual.sim-details">5.7. Simulation Details</a></span></dt>
+<dt><span class="sect1"><a href="cg-manual.html#cg-manual.mergeopts">5.5. cg_merge Command-line Options</a></span></dt>
+<dt><span class="sect1"><a href="cg-manual.html#cg-manual.diffopts">5.6. cg_diff Command-line Options</a></span></dt>
+<dt><span class="sect1"><a href="cg-manual.html#cg-manual.acting-on">5.7. Acting on Cachegrind's Information</a></span></dt>
+<dt><span class="sect1"><a href="cg-manual.html#cg-manual.sim-details">5.8. Simulation Details</a></span></dt>
 <dd><dl>
-<dt><span class="sect2"><a href="cg-manual.html#cache-sim">5.7.1. Cache Simulation Specifics</a></span></dt>
-<dt><span class="sect2"><a href="cg-manual.html#branch-sim">5.7.2. Branch Simulation Specifics</a></span></dt>
-<dt><span class="sect2"><a href="cg-manual.html#cg-manual.annopts.accuracy">5.7.3. Accuracy</a></span></dt>
+<dt><span class="sect2"><a href="cg-manual.html#cache-sim">5.8.1. Cache Simulation Specifics</a></span></dt>
+<dt><span class="sect2"><a href="cg-manual.html#branch-sim">5.8.2. Branch Simulation Specifics</a></span></dt>
+<dt><span class="sect2"><a href="cg-manual.html#cg-manual.annopts.accuracy">5.8.3. Accuracy</a></span></dt>
 </dl></dd>
-<dt><span class="sect1"><a href="cg-manual.html#cg-manual.impl-details">5.8. Implementation Details</a></span></dt>
+<dt><span class="sect1"><a href="cg-manual.html#cg-manual.impl-details">5.9. Implementation Details</a></span></dt>
 <dd><dl>
-<dt><span class="sect2"><a href="cg-manual.html#cg-manual.impl-details.how-cg-works">5.8.1. How Cachegrind Works</a></span></dt>
-<dt><span class="sect2"><a href="cg-manual.html#cg-manual.impl-details.file-format">5.8.2. Cachegrind Output File Format</a></span></dt>
+<dt><span class="sect2"><a href="cg-manual.html#cg-manual.impl-details.how-cg-works">5.9.1. How Cachegrind Works</a></span></dt>
+<dt><span class="sect2"><a href="cg-manual.html#cg-manual.impl-details.file-format">5.9.2. Cachegrind Output File Format</a></span></dt>
 </dl></dd>
 </dl></dd>
 <dt><span class="chapter"><a href="cl-manual.html">6. Callgrind: a call-graph generating cache and branch prediction profiler</a></span></dt>
@@ -265,9 +267,9 @@ function</a></span></dt>
 <dt><span class="sect1"><a href="dh-manual.html#dh-manual.overview">10.1. Overview</a></span></dt>
 <dt><span class="sect1"><a href="dh-manual.html#dh-manual.understanding">10.2. Understanding DHAT's output</a></span></dt>
 <dd><dl>
-<dt><span class="sect2"><a href="dh-manual.html#id392111">10.2.1. Interpreting the max-live, tot-alloc and deaths fields</a></span></dt>
-<dt><span class="sect2"><a href="dh-manual.html#id401398">10.2.2. Interpreting the acc-ratios fields</a></span></dt>
-<dt><span class="sect2"><a href="dh-manual.html#id430984">10.2.3. Interpreting "Aggregated access counts by offset" data</a></span></dt>
+<dt><span class="sect2"><a href="dh-manual.html#idp16800480">10.2.1. Interpreting the max-live, tot-alloc and deaths fields</a></span></dt>
+<dt><span class="sect2"><a href="dh-manual.html#idp14355664">10.2.2. Interpreting the acc-ratios fields</a></span></dt>
+<dt><span class="sect2"><a href="dh-manual.html#idp14215648">10.2.3. Interpreting "Aggregated access counts by offset" data</a></span></dt>
 </dl></dd>
 <dt><span class="sect1"><a href="dh-manual.html#dh-manual.options">10.3. DHAT Command-line Options</a></span></dt>
 </dl></dd>

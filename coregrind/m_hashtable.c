@@ -7,7 +7,7 @@
    This file is part of Valgrind, a dynamic binary instrumentation
    framework.
 
-   Copyright (C) 2005-2011 Nicholas Nethercote
+   Copyright (C) 2005-2013 Nicholas Nethercote
       njn@valgrind.org
 
    This program is free software; you can redistribute it and/or
@@ -47,7 +47,7 @@ struct _VgHashTable {
    UInt         iterChain;  // next chain to be traversed by the iterator
    VgHashNode** chains;     // expanding array of hash chains
    Bool         iterOK;     // table safe to iterate over?
-   HChar*       name;       // name of table (for debugging only)
+   const HChar* name;       // name of table (for debugging only)
 };
 
 #define N_HASH_PRIMES 20
@@ -64,7 +64,7 @@ static SizeT primes[N_HASH_PRIMES] = {
 /*--- Functions                                                    ---*/
 /*--------------------------------------------------------------------*/
 
-VgHashTable VG_(HT_construct) ( HChar* name )
+VgHashTable VG_(HT_construct) ( const HChar* name )
 {
    /* Initialises to zero, ie. all entries NULL */
    SizeT       n_chains = primes[0];
@@ -249,7 +249,7 @@ void* VG_(HT_Next)(VgHashTable table)
    return NULL;
 }
 
-void VG_(HT_destruct)(VgHashTable table)
+void VG_(HT_destruct)(VgHashTable table, void(*freenode_fn)(void*))
 {
    UInt       i;
    VgHashNode *node, *node_next;
@@ -257,7 +257,7 @@ void VG_(HT_destruct)(VgHashTable table)
    for (i = 0; i < table->n_chains; i++) {
       for (node = table->chains[i]; node != NULL; node = node_next) {
          node_next = node->next;
-         VG_(free)(node);
+         freenode_fn(node);
       }
    }
    VG_(free)(table->chains);

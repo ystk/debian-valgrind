@@ -1,8 +1,7 @@
-/* -*- mode: C; c-basic-offset: 3; indent-tabs-mode: nil; -*- */
 /*
   This file is part of drd, a thread error detector.
 
-  Copyright (C) 2006-2011 Bart Van Assche <bvanassche@acm.org>.
+  Copyright (C) 2006-2013 Bart Van Assche <bvanassche@acm.org>.
 
   This program is free software; you can redistribute it and/or
   modify it under the terms of the GNU General Public License as
@@ -33,6 +32,11 @@
 #include "pub_tool_machine.h"     // VG_(get_SP)()
 #include "pub_tool_mallocfree.h"  // VG_(malloc)(), VG_(free)()
 #include "pub_tool_threadstate.h" // VG_INVALID_THREADID
+
+
+/* Global variables. */
+
+Segment* DRD_(g_sg_list);
 
 
 /* Local variables. */
@@ -69,8 +73,10 @@ static void sg_init(Segment* const sg,
    creator_sg = (creator != DRD_INVALID_THREADID
                  ? DRD_(thread_get_segment)(creator) : 0);
 
-   sg->next = 0;
-   sg->prev = 0;
+   sg->g_next = NULL;
+   sg->g_prev = NULL;
+   sg->thr_next = NULL;
+   sg->thr_prev = NULL;
    sg->tid = created;
    sg->refcnt = 1;
 
@@ -88,7 +94,7 @@ static void sg_init(Segment* const sg,
 
    if (s_trace_segment)
    {
-      char* vc;
+      HChar* vc;
 
       vc = DRD_(vc_aprint)(&sg->vc);
       VG_(message)(Vg_DebugMsg, "New segment for thread %d with vc %s\n",
@@ -120,6 +126,11 @@ Segment* DRD_(sg_new)(const DrdThreadId creator, const DrdThreadId created)
    sg = VG_(malloc)("drd.segment.sn.1", sizeof(*sg));
    tl_assert(sg);
    sg_init(sg, creator, created);
+   if (DRD_(g_sg_list)) {
+      DRD_(g_sg_list)->g_prev = sg;
+      sg->g_next = DRD_(g_sg_list);
+   }
+   DRD_(g_sg_list) = sg;
    return sg;
 }
 
@@ -127,7 +138,7 @@ static void DRD_(sg_delete)(Segment* const sg)
 {
    if (DRD_(sg_get_trace)())
    {
-      char* vc;
+      HChar* vc;
 
       vc = DRD_(vc_aprint)(&sg->vc);
       VG_(message)(Vg_DebugMsg, "Discarding the segment with vector clock %s\n",
@@ -138,6 +149,12 @@ static void DRD_(sg_delete)(Segment* const sg)
    s_segments_alive_count--;
 
    tl_assert(sg);
+   if (sg->g_next)
+      sg->g_next->g_prev = sg->g_prev;
+   if (sg->g_prev)
+      sg->g_prev->g_next = sg->g_next;
+   else
+      DRD_(g_sg_list) = sg->g_next;
    DRD_(sg_cleanup)(sg);
    VG_(free)(sg);
 }
@@ -162,7 +179,7 @@ void DRD_(sg_put)(Segment* const sg)
 
    if (s_trace_segment)
    {
-      char* vc;
+      HChar* vc;
 
       vc = DRD_(vc_aprint)(&sg->vc);
       VG_(message)(Vg_DebugMsg,
@@ -189,7 +206,7 @@ void DRD_(sg_merge)(Segment* const sg1, Segment* const sg2)
 
    if (s_trace_segment)
    {
-      char *vc1, *vc2;
+      HChar *vc1, *vc2;
 
       vc1 = DRD_(vc_aprint)(&sg1->vc);
       vc2 = DRD_(vc_aprint)(&sg2->vc);

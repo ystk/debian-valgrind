@@ -1,9 +1,10 @@
-01_more-vg-n-segments.patch
-02_version.patch
 03_allow-or-quoting-of-strings-in-.valgrindrc.patch
 04_workaround-SIGSEGV-on-PPC.patch
 05_fix-callgrind_control.patch
-06_fix-configure.patch
 07_fix-spelling-in-binary.patch
 08_fix-spelling-in-manpage.patch
-09_valgrind-listener-manpage.patch
+09_fix-armhf-detect.patch
+10_fix-memcheck-manual.patch
+11_track-af_inet6.patch
+12_glibc-2.19.patch
+13_xabort.patch

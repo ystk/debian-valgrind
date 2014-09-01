@@ -5,8 +5,8 @@ Author: Pierre Habouzit <madcoder@debian.org>
 Reviewed-by: Alessandro Ghedini <ghedo@debian.org>
 Last-Update: 2012-05-10
 
---- valgrind.orig/callgrind/callgrind_control.in
-+++ valgrind/callgrind/callgrind_control.in
+--- a/callgrind/callgrind_control.in
++++ b/callgrind/callgrind_control.in
 @@ -29,7 +29,7 @@
    @pids = ();
    open LIST, "vgdb -l|";

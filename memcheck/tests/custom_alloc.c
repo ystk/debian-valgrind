@@ -22,7 +22,7 @@ void* get_superblock(void)
    // program to be using it unless its handed out by custom_alloc()
 
    // with redzones, better not to have it
-   VALGRIND_MAKE_MEM_NOACCESS(p, SUPERBLOCK_SIZE);
+   (void) VALGRIND_MAKE_MEM_NOACCESS(p, SUPERBLOCK_SIZE);
 
    return p;
 }
@@ -54,6 +54,44 @@ static void custom_free(void* p)
    VALGRIND_FREELIKE_BLOCK( p, RZ );
 }
 
+static void checkredzone(void)
+{
+   /* check that accessing the redzone of a MALLOCLIKE block
+      is detected  when the superblock was not marked as no access. */
+   char superblock[1 + RZ + 20 + RZ + 1];
+   char *p = 1 + RZ + superblock;
+   assert(RZ > 0);
+
+   // Indicate we have allocated p from our superblock:
+   VALGRIND_MALLOCLIKE_BLOCK( p, 20, RZ, /*is_zeroed*/1 );
+   p[0] = 0; 
+   p[-1] = p[0]; // error expected
+   p[-RZ] = p[0]; // error expected
+   p[-RZ-1] = p[0]; // no error expected
+   
+   p[19] = 0; 
+   p[19 + 1]  = p[0]; // error expected
+   p[19 + RZ] = p[0]; // error expected
+   p[19 + RZ + 1] = p[0]; // no error expected
+
+   VALGRIND_FREELIKE_BLOCK( p, RZ );
+
+   // Now, indicate we have re-allocated p from our superblock
+   // but with only a size 10.
+   VALGRIND_MALLOCLIKE_BLOCK( p, 10, RZ, /*is_zeroed*/1 );
+   p[0] = 0; 
+   p[-1] = p[0]; // error expected
+   p[-RZ] = p[0]; // error expected
+   p[-RZ-1] = p[0]; // no error expected
+   
+   p[9] = 0; 
+   p[9 + 1]  = p[0]; // error expected
+   p[9 + RZ] = p[0]; // error expected
+   p[9 + RZ + 1] = p[0]; // no error expected
+
+   VALGRIND_FREELIKE_BLOCK( p, RZ );
+
+}
 
 
 
@@ -84,7 +122,7 @@ int main(void)
 
    // Make the entire array defined again such that it can be verified whether
    // the red zone is marked properly when resizing in place.
-   VALGRIND_MAKE_MEM_DEFINED(array, sizeof(int) * 10);
+   (void) VALGRIND_MAKE_MEM_DEFINED(array, sizeof(int) * 10);
 
    VALGRIND_RESIZEINPLACE_BLOCK(array, sizeof(int) * 5, sizeof(int) * 7, RZ);
    if (array[5]) array[4]++; // uninitialized read of array[5]
@@ -104,16 +142,14 @@ int main(void)
 
    make_leak();
    x = array[0];        // use after free (ok without MALLOCLIKE/MAKE_MEM_NOACCESS)
-                        // (nb: initialised because is_zeroed==1 above)
-                        // unfortunately not identified as being in a free'd
-                        // block because the freeing of the block and shadow
-                        // chunk isn't postponed.
 
    // Bug 137073: passing 0 to MALLOCLIKE_BLOCK was causing an assertion
    // failure.  Test for this (and likewise for FREELIKE_BLOCK).
    VALGRIND_MALLOCLIKE_BLOCK(0,0,0,0);
    VALGRIND_FREELIKE_BLOCK(0,0);
-   
+
+   checkredzone();
+
    return x;
 
    // leak from make_leak()

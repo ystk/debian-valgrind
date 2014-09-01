@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <config.h>
 
 double foo = -1.0;
 double FRT1;
@@ -40,7 +41,6 @@ void test_parity_instrs()
 void test_lfiwax()
 {
    unsigned long base;
-   unsigned long offset;
 
    typedef struct {
       unsigned int hi;
@@ -50,9 +50,8 @@ void test_lfiwax()
    int_pair_t *ip;
    foo = -1024.0;
    base = (unsigned long) &foo;
-   offset = 0;
-   __asm__ volatile ("lfiwax %0, %1, %2":"=f" (FRT1):"r"(base),
-                     "r"(offset));
+
+   __asm__ volatile ("lfiwax %0, 0, %1":"=f" (FRT1):"r"(base));
    ip = (int_pair_t *) & FRT1;
    printf("lfiwax (%f) => FRT=(%x, %x)\n", foo, ip->hi, ip->lo);
 
@@ -65,9 +64,16 @@ void test_lfiwax()
 ** FPp	= leftmost 64 bits stored at DS(RA)
 ** FPp+1= rightmost 64 bits stored at DS(RA)
 ** FPp must be an even float register
+**
+** The [st|l]fdp[x] instructions were put into the "Floating-Point.Phased-Out"
+** category in ISA 2.06 (i.e., POWER7 timeframe).  If valgrind and its
+** testsuite are built with -mcpu=power7 (or later), then the assembler will
+** not recognize those phased out instructions.
+**
 */
-int test_double_pair_instrs()
+void test_double_pair_instrs()
 {
+#ifdef HAVE_AS_PPC_FPPO
    typedef struct {
       double hi;
       double lo;
@@ -75,14 +81,6 @@ int test_double_pair_instrs()
 
    /* the following decls are for alignment */
    int i;
-   int j;
-   int k;
-   int l;
-#ifdef __powerpc64__
-   int m;
-   int n;
-   int o;
-#endif
    dbl_pair_t dbl_pair[3];      /* must be quad word aligned */
    unsigned long base;
    unsigned long offset;
@@ -111,8 +109,8 @@ int test_double_pair_instrs()
    FRT2 = -1.0;
    base = (unsigned long) &dbl_pair;
    offset = (unsigned long) &dbl_pair[1] - base;
-   __asm__ volatile ("or 20, 0, %0"::"r" (base));
-   __asm__ volatile ("or 21, 0, %0"::"r" (offset));
+   __asm__ volatile ("ori 20, %0, 0"::"r" (base));
+   __asm__ volatile ("ori 21, %0, 0"::"r" (offset));
    __asm__ volatile ("lfdpx 10, 20, 21");
    __asm__ volatile ("fmr %0, 10":"=f" (FRT1));
    __asm__ volatile ("fmr %0, 11":"=f" (FRT2));
@@ -123,17 +121,13 @@ int test_double_pair_instrs()
    FRT2 = -16.1024;
    base = (unsigned long) &dbl_pair;
    offset = (unsigned long) &dbl_pair[2] - base;
-   __asm__ volatile ("or 20, 0, %0"::"r" (base));
-   __asm__ volatile ("or 21, 0, %0"::"r" (offset));
+   __asm__ volatile ("ori 20, %0, 0"::"r" (base));
+   __asm__ volatile ("ori 21, %0, 0"::"r" (offset));
    __asm__ volatile ("fmr %0, 10":"=f" (FRT1));
    __asm__ volatile ("fmr %0, 11":"=f" (FRT2));
    __asm__ volatile ("stfdpx 10, 20, 21");
    printf("stfdpx (%f, %f) => F_hi=%f, F_lo=%f\n",
           FRT1, FRT2, dbl_pair[2].hi, dbl_pair[2].lo);
-#ifdef __powerpc64__
-   return i + j + k + l + m + n + o;
-#else
-   return i + j + k + l;
 #endif
 }
 
@@ -170,11 +164,10 @@ void test_fcpsgn()
 }
 
 /* b0 may be non-zero in lwarx/ldarx Power6 instrs */
-int test_reservation()
+void test_reservation()
 {
 
    int RT;
-   int i, j;
    unsigned long base;
    unsigned long offset;
    long arr[4] = { 0xdeadbeef, 0xbad0beef, 0xbeefdead, 0xbeef0bad };
@@ -182,18 +175,18 @@ int test_reservation()
 
    base = (unsigned long) &arr;
    offset = (unsigned long) &arr[1] - base;
-   __asm__ volatile ("or 20, 0, %0"::"r" (base));
-   __asm__ volatile ("or 21, 0, %0"::"r" (offset));
+   __asm__ volatile ("ori 20, %0, 0"::"r" (base));
+   __asm__ volatile ("ori 21, %0, 0"::"r" (offset));
    __asm__ volatile ("lwarx %0, 20, 21, 1":"=r" (RT));
    printf("lwarx => %x\n", RT);
 
 #ifdef __powerpc64__
    offset = (unsigned long) &arr[1] - base;
-   __asm__ volatile ("or 21, 0, %0"::"r" (offset));
+   __asm__ volatile ("ori 21, %0, 0"::"r" (offset));
    __asm__ volatile ("ldarx %0, 20, 21, 1":"=r" (RT));
    printf("ldarx => %x\n", RT);
 #endif
-   return i + j;
+
 }
 
 int main(void)

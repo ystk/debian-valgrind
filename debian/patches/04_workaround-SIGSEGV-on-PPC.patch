@@ -6,8 +6,6 @@ Author: Pierre Habouzit <madcoder@debian.org>
 Reviewed-by: Alessandro Ghedini <ghedo@debian.org>
 Last-Update: 2012-05-10
 
-diff --git a/coregrind/m_machine.c b/coregrind/m_machine.c
-index 8dc3e17..7921502 100644
 --- a/coregrind/m_machine.c
 +++ b/coregrind/m_machine.c
 @@ -27,6 +27,10 @@
