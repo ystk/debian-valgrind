@@ -7,7 +7,7 @@
    This file is part of Valgrind, a dynamic binary instrumentation
    framework.
 
-   Copyright (C) 2004-2011 OpenWorks LLP
+   Copyright (C) 2004-2013 OpenWorks LLP
       info@open-works.net
 
    This program is free software; you can redistribute it and/or
@@ -36,6 +36,9 @@
 #ifndef __VEX_GUEST_GENERIC_BB_TO_IR_H
 #define __VEX_GUEST_GENERIC_BB_TO_IR_H
 
+#include "libvex_basictypes.h"
+#include "libvex_ir.h"              // IRJumpKind
+#include "libvex.h"                 // VexArch
 
 /* This defines stuff needed by the guest insn disassemblers.
    It's a bit circular; is imported by
@@ -76,6 +79,13 @@ typedef
       enum { Dis_StopHere, Dis_Continue, 
              Dis_ResteerU, Dis_ResteerC } whatNext;
 
+      /* For Dis_StopHere, we need to end the block and create a
+         transfer to whatever the NIA is.  That will have presumably
+         been set by the IR generated for this insn.  So we need to
+         know the jump kind to use.  Should Ijk_INVALID in other Dis_
+         cases. */
+      IRJumpKind jk_StopHere;
+
       /* For Dis_Resteer, this is the guest address we should continue
          at.  Otherwise ignored (should be zero). */
       Addr64 continueAt;
@@ -112,10 +122,6 @@ typedef
       /* This is the IRSB to which the resulting IR is to be appended. */
       /*OUT*/ IRSB*        irbb,
 
-      /* Do we need to generate IR to set the guest IP for this insn,
-         or not? */
-      /*IN*/  Bool         put_IP,
-
       /* Return True iff resteering to the given addr is allowed (for
          branches/calls to destinations that are known at JIT-time) */
       /*IN*/  Bool         (*resteerOkFn) ( /*opaque*/void*, Addr64 ),
@@ -147,7 +153,10 @@ typedef
       /*IN*/  VexAbiInfo*  abiinfo,
 
       /* Is the host bigendian? */
-      /*IN*/  Bool         host_bigendian
+      /*IN*/  Bool         host_bigendian,
+
+      /* Should diagnostics be printed for illegal instructions? */
+      /*IN*/  Bool         sigill_diag
 
    );
 
@@ -161,20 +170,24 @@ extern
 IRSB* bb_to_IR ( 
          /*OUT*/VexGuestExtents* vge,
          /*OUT*/UInt*            n_sc_extents,
+         /*OUT*/UInt*            n_guest_instrs, /* stats only */
          /*IN*/ void*            callback_opaque,
          /*IN*/ DisOneInstrFn    dis_instr_fn,
          /*IN*/ UChar*           guest_code,
          /*IN*/ Addr64           guest_IP_bbstart,
          /*IN*/ Bool             (*chase_into_ok)(void*,Addr64),
          /*IN*/ Bool             host_bigendian,
+         /*IN*/ Bool             sigill_diag,
          /*IN*/ VexArch          arch_guest,
          /*IN*/ VexArchInfo*     archinfo_guest,
          /*IN*/ VexAbiInfo*      abiinfo_both,
          /*IN*/ IRType           guest_word_type,
          /*IN*/ UInt             (*needs_self_check)(void*,VexGuestExtents*),
          /*IN*/ Bool             (*preamble_function)(void*,IRSB*),
-         /*IN*/ Int              offB_TISTART,
-         /*IN*/ Int              offB_TILEN
+         /*IN*/ Int              offB_GUEST_TISTART,
+         /*IN*/ Int              offB_GUEST_TILEN,
+         /*IN*/ Int              offB_GUEST_IP,
+         /*IN*/ Int              szB_GUEST_IP
       );
 
 

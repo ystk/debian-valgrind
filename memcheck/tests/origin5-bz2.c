@@ -4651,7 +4651,7 @@ void flush_RL ( EState* s )
 
 
 /*---------------------------------------------------*/
-static
+static __attribute__((noinline))
 Bool copy_input_until_stop ( EState* s )
 {
    Bool progress_in = False;
@@ -6476,7 +6476,7 @@ int main ( int argc, char** argv )
 
    /* Make inbuf[10] be undefined, so as to check that this source
       eventually shows up in various places. */
-   VALGRIND_MAKE_MEM_UNDEFINED(&inbuf[10], sizeof(char));
+   (void) VALGRIND_MAKE_MEM_UNDEFINED(&inbuf[10], sizeof(char));
 
    if (inbuf[10] == 11) vex_printf("foo\n"); else vex_printf("bar\n");
 

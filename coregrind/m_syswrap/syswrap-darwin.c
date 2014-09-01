@@ -7,7 +7,7 @@
    This file is part of Valgrind, a dynamic binary instrumentation
    framework.
 
-   Copyright (C) 2005-2011 Apple Inc.
+   Copyright (C) 2005-2013 Apple Inc.
       Greg Parker  gparker@apple.com
 
    This program is free software; you can redistribute it and/or
@@ -41,7 +41,6 @@
 #include "pub_core_debuglog.h"
 #include "pub_core_debuginfo.h"    // VG_(di_notify_*)
 #include "pub_core_transtab.h"     // VG_(discard_translations)
-#include "pub_tool_gdbserver.h"    // VG_(gdbserver)
 #include "pub_core_libcbase.h"
 #include "pub_core_libcassert.h"
 #include "pub_core_libcfile.h"
@@ -373,6 +372,20 @@ static OpenPort *allocated_ports;
 /* Count of open ports. */
 static Int allocated_port_count = 0;
 
+/* Create an entry for |port|, with no other info.  Assumes it doesn't
+   already exist. */
+static void port_create_vanilla(mach_port_t port)
+{
+   OpenPort* op
+     = VG_(arena_calloc)(VG_AR_CORE, "syswrap-darwin.port_create_vanilla", 
+			 sizeof(OpenPort), 1);
+   op->port = port;
+   /* Add it to the list. */
+   op->next = allocated_ports;
+   if (allocated_ports) allocated_ports->prev = op;
+   allocated_ports = op;
+   allocated_port_count++;
+}
 
 __attribute__((unused))
 static Bool port_exists(mach_port_t port)
@@ -645,7 +658,7 @@ void ML_(sync_mappings)(const HChar *when, const HChar *where, Int num)
    ok = False;
    while (!ok) {
       VG_(free)(css);   // css is NULL on first iteration;  that's ok.
-      css = VG_(malloc)("sys_wrap.sync_mappings", css_size*sizeof(ChangedSeg));
+      css = VG_(calloc)("sys_wrap.sync_mappings", css_size, sizeof(ChangedSeg));
       ok = VG_(get_changed_segments)(when, where, css, css_size, &css_used);
       css_size *= 2;
    } 
@@ -653,23 +666,25 @@ void ML_(sync_mappings)(const HChar *when, const HChar *where, Int num)
    // Now add/remove them.
    for (i = 0; i < css_used; i++) {
       ChangedSeg* cs = &css[i];
-      Char* action;
       if (cs->is_added) {
          ML_(notify_core_and_tool_of_mmap)(
                cs->start, cs->end - cs->start + 1,
                cs->prot, VKI_MAP_PRIVATE, 0, cs->offset);
          // should this call VG_(di_notify_mmap) also?
-         action = "added";
-
       } else {
          ML_(notify_core_and_tool_of_munmap)(
                cs->start, cs->end - cs->start + 1);
-         action = "removed";
       }
       if (VG_(clo_trace_syscalls)) {
-          VG_(debugLog)(0, "syswrap-darwin",
-                        "  %s region 0x%010lx..0x%010lx at %s (%s)\n", 
-                        action, cs->start, cs->end + 1, where, when);
+          if (cs->is_added) {
+             VG_(debugLog)(0, "syswrap-darwin",
+                "  added region 0x%010lx..0x%010lx prot %u at %s (%s)\n", 
+                cs->start, cs->end + 1, (UInt)cs->prot, where, when);
+	  } else {
+             VG_(debugLog)(0, "syswrap-darwin",
+                "  removed region 0x%010lx..0x%010lx at %s (%s)\n", 
+                cs->start, cs->end + 1, where, when);
+	  }
       }
    }
 
@@ -1477,9 +1492,12 @@ PRE(workq_open)
 static const char *workqop_name(int op)
 {
    switch (op) {
-   case VKI_WQOPS_QUEUE_ADD: return "QUEUE_ADD";
-   case VKI_WQOPS_QUEUE_REMOVE: return "QUEUE_REMOVE";
-   case VKI_WQOPS_THREAD_RETURN: return "THREAD_RETURN";
+   case VKI_WQOPS_QUEUE_ADD:        return "QUEUE_ADD";
+   case VKI_WQOPS_QUEUE_REMOVE:     return "QUEUE_REMOVE";
+   case VKI_WQOPS_THREAD_RETURN:    return "THREAD_RETURN";
+   case VKI_WQOPS_THREAD_SETCONC:   return "THREAD_SETCONC";
+   case VKI_WQOPS_QUEUE_NEWSPISUPP: return "QUEUE_NEWSPISUPP";
+   case VKI_WQOPS_QUEUE_REQTHREADS: return "QUEUE_REQTHREADS";
    default: return "?";
    }
 }
@@ -1498,7 +1516,14 @@ PRE(workq_ops)
       // GrP fixme need anything here?
       // GrP fixme may block?
       break;
-
+   case VKI_WQOPS_QUEUE_NEWSPISUPP:
+      // JRS don't think we need to do anything here -- this just checks
+      // whether some newer functionality is supported
+      break;
+   case VKI_WQOPS_QUEUE_REQTHREADS:
+      // JRS uh, looks like it queues up a bunch of threads, or some such?
+      *flags |= SfMayBlock; // the kernel sources take a spinlock, so play safe
+      break;
    case VKI_WQOPS_THREAD_RETURN: {
       // The interesting case. The kernel will do one of two things:
       // 1. Return normally. We continue; libc proceeds to stop the thread.
@@ -1515,7 +1540,6 @@ PRE(workq_ops)
       *flags |= SfMayBlock;  // GrP fixme true?
       break;
    }
-
    default:
       VG_(printf)("UNKNOWN workq_ops option %ld\n", ARG1);
       break;
@@ -1697,6 +1721,12 @@ PRE(settid)
 {
     PRINT("settid(%ld, %ld)", ARG1, ARG2);
     PRE_REG_READ2(long, "settid", vki_uid_t, "uid", vki_gid_t, "gid");
+}
+
+PRE(gettid)
+{
+    PRINT("gettid()");
+    PRE_REG_READ0(long, gettid);
 }
 
 /* XXX need to check whether we need POST operations for
@@ -1936,6 +1966,21 @@ POST(shm_open)
    }
 }
 
+PRE(shm_unlink)
+{
+   *flags |= SfMayBlock;
+   PRINT("shm_unlink ( %#lx(%s) )", ARG1,(char*)ARG1);
+   PRE_REG_READ1(long, "shm_unlink", const char *, pathname);
+   PRE_MEM_RASCIIZ( "shm_unlink(pathname)", ARG1 );
+}
+POST(shm_unlink)
+{
+   /* My reading of the man page suggests that a call may cause memory
+      mappings to change: "if no references exist at the time of the
+      call to shm_unlink(), the resources are reclaimed immediately".
+      So we need to resync here, sigh. */
+   ML_(sync_mappings)("after", "shm_unlink", 0);
+}
 
 PRE(stat_extended)
 {
@@ -2696,7 +2741,7 @@ PRE(initgroups)
 /* Largely copied from PRE(sys_execve) in syswrap-generic.c, and from
    the simpler AIX equivalent (syswrap-aix5.c). */
 // Pre_read a char** argument.
-static void pre_argv_envp(Addr a, ThreadId tid, Char* s1, Char* s2)
+static void pre_argv_envp(Addr a, ThreadId tid, const Char* s1, const Char* s2)
 {
    while (True) {
       Addr a_deref;
@@ -2738,9 +2783,9 @@ static SysRes simple_pre_exec_check ( const HChar* exe_name,
 PRE(posix_spawn)
 {
    Char*        path = NULL;       /* path to executable */
-   Char**       envp = NULL;
-   Char**       argv = NULL;
-   Char**       arg2copy;
+   HChar**      envp = NULL;
+   HChar**      argv = NULL;
+   HChar**      arg2copy;
    Char*        launcher_basename = NULL;
    Int          i, j, tot_args;
    SysRes       res;
@@ -2814,14 +2859,11 @@ PRE(posix_spawn)
    /* Ok.  So let's give it a try. */
    VG_(debugLog)(1, "syswrap", "Posix_spawn of %s\n", (Char*)ARG2);
 
-   // Terminate gdbserver if it is active.
-   if (VG_(clo_vgdb)  != Vg_VgdbNo) {
-      // If the child will not be traced, we need to terminate gdbserver
-      // to cleanup the gdbserver resources (e.g. the FIFO files).
-      // If child will be traced, we also terminate gdbserver: the new 
-      // Valgrind will start a fresh gdbserver after exec.
-      VG_(gdbserver) (tid);
-   }
+   /* posix_spawn on Darwin is combining the fork and exec in one syscall.
+      So, we should not terminate gdbserver : this is still the parent
+      running, which will terminate its gdbserver when exiting.
+      If the child process is traced, it will start a fresh gdbserver
+      after posix_spawn. */
 
    // Set up the child's exe path.
    //
@@ -2854,7 +2896,7 @@ PRE(posix_spawn)
    if (ARG5 == 0) {
       envp = NULL;
    } else {
-      envp = VG_(env_clone)( (Char**)ARG5 );
+      envp = VG_(env_clone)( (HChar**)ARG5 );
       vg_assert(envp);
       VG_(env_remove_valgrind_env_stuff)( envp );
    }
@@ -2873,7 +2915,7 @@ PRE(posix_spawn)
    // are omitted.
    //
    if (!trace_this_child) {
-      argv = (Char**)ARG4;
+      argv = (HChar**)ARG4;
    } else {
       vg_assert( VG_(args_for_valgrind) );
       vg_assert( VG_(args_for_valgrind_noexecpass) >= 0 );
@@ -2888,7 +2930,7 @@ PRE(posix_spawn)
       // name of client exe
       tot_args++;
       // args for client exe, skipping [0]
-      arg2copy = (Char**)ARG4;
+      arg2copy = (HChar**)ARG4;
       if (arg2copy && arg2copy[0]) {
          for (i = 1; arg2copy[i]; i++)
             tot_args++;
@@ -2918,7 +2960,7 @@ PRE(posix_spawn)
       state does the child inherit from the parent?  */
 
    if (0) {
-      Char **cpp;
+      HChar **cpp;
       VG_(printf)("posix_spawn: %s\n", path);
       for (cpp = argv; cpp && *cpp; cpp++)
          VG_(printf)("argv: %s\n", *cpp);
@@ -2939,7 +2981,9 @@ PRE(posix_spawn)
 POST(posix_spawn)
 {
    vg_assert(SUCCESS);
-   //POST_MEM_WRITE( ARG1, sizeof(vki_pid_t) );
+   if (ARG1 != 0) {
+      POST_MEM_WRITE( ARG1, sizeof(vki_pid_t) );
+   }
 }
 
 
@@ -3107,7 +3151,7 @@ PRE(sendmsg)
    PRINT("sendmsg ( %ld, %#lx, %ld )",ARG1,ARG2,ARG3);
    PRE_REG_READ3(long, "sendmsg",
                  int, s, const struct msghdr *, msg, int, flags);
-   ML_(generic_PRE_sys_sendmsg)(tid, ARG1,ARG2);
+   ML_(generic_PRE_sys_sendmsg)(tid, "msg", (struct vki_msghdr *)ARG2);
 }
 
 
@@ -3116,12 +3160,12 @@ PRE(recvmsg)
    *flags |= SfMayBlock;
    PRINT("recvmsg ( %ld, %#lx, %ld )",ARG1,ARG2,ARG3);
    PRE_REG_READ3(long, "recvmsg", int, s, struct msghdr *, msg, int, flags);
-   ML_(generic_PRE_sys_recvmsg)(tid, ARG1,ARG2);
+   ML_(generic_PRE_sys_recvmsg)(tid, "msg", (struct vki_msghdr *)ARG2);
 }
 
 POST(recvmsg)
 {
-   ML_(generic_POST_sys_recvmsg)(tid, ARG1,ARG2);
+   ML_(generic_POST_sys_recvmsg)(tid, "msg", (struct vki_msghdr *)ARG2, RES);
 }
 
 
@@ -3521,6 +3565,7 @@ POST(auditon)
 PRE(mmap)
 {
    // SysRes r;
+   if (0) VG_(am_do_sync_check)("(PRE_MMAP)",__FILE__,__LINE__);
 
 #if VG_WORDSIZE == 4
    PRINT("mmap ( %#lx, %lu, %ld, %ld, %ld, %lld )",
@@ -4986,6 +5031,8 @@ PRE(task_get_special_port)
       PRINT("task_get_special_port(%s, TASK_BOOTSTRAP_PORT)", 
             name_for_port(MACH_REMOTE));
       break;
+#if DARWIN_VERS < DARWIN_10_8
+   /* These disappeared in 10.8 */
    case TASK_WIRED_LEDGER_PORT:
       PRINT("task_get_special_port(%s, TASK_WIRED_LEDGER_PORT)", 
             name_for_port(MACH_REMOTE));
@@ -4994,6 +5041,7 @@ PRE(task_get_special_port)
       PRINT("task_get_special_port(%s, TASK_PAGED_LEDGER_PORT)", 
             name_for_port(MACH_REMOTE));
       break;
+#endif
    default:
       PRINT("task_get_special_port(%s, %d)", 
             name_for_port(MACH_REMOTE), req->which_port);
@@ -5032,12 +5080,15 @@ POST(task_get_special_port)
    case TASK_HOST_PORT:
       assign_port_name(reply->special_port.name, "host");
       break;
+#if DARWIN_VERS < DARWIN_10_8
+   /* These disappeared in 10.8 */
    case TASK_WIRED_LEDGER_PORT:
       assign_port_name(reply->special_port.name, "wired-ledger");
       break;
    case TASK_PAGED_LEDGER_PORT:
       assign_port_name(reply->special_port.name, "paged-ledger");
       break;
+#endif
    default:
       assign_port_name(reply->special_port.name, "special-%p");
       break;
@@ -6483,6 +6534,7 @@ POST(bsdthread_create)
    // should be in pthread_hijack instead, just before the call to
    // start_thread_NORETURN(), call_on_new_stack_0_1(), but we don't have the
    // parent tid value there...
+   vg_assert(VG_(owns_BigLock_LL)(tid));
    VG_TRACK ( pre_thread_ll_create, tid, tst->tid );
 }
 
@@ -6502,7 +6554,13 @@ PRE(bsdthread_terminate)
    if (ARG4) semaphore_signal((semaphore_t)ARG4);
    if (ARG1  &&  ARG2) {
        ML_(notify_core_and_tool_of_munmap)(ARG1, ARG2);
+#      if DARWIN_VERS >= DARWIN_10_8
+       /* JRS 2012 Aug 02: ugly hack: vm_deallocate disappeared from
+          the mig output.  Work around it for the time being. */
+       VG_(do_syscall2)(__NR_munmap, ARG1, ARG2);
+#      else
        vm_deallocate(mach_task_self(), (vm_address_t)ARG1, (vm_size_t)ARG2);
+#      endif
    }
 
    // Tell V to terminate the thread.
@@ -6685,6 +6743,14 @@ PRE(bootstrap_register)
 
    PRINT("bootstrap_register(port 0x%x, \"%s\")",
          req->service_port.name, req->service_name);
+
+   /* The required entry in the allocated_ports list (mapping) might
+      not exist, due perhaps to broken syscall wrappers (mach__N etc).
+      Create a minimal entry so that assign_port_name below doesn't
+      cause an assertion. */
+   if (!port_exists(req->service_port.name)) {
+      port_create_vanilla(req->service_port.name);
+   }
 
    assign_port_name(req->service_port.name, req->service_name);
 
@@ -7719,6 +7785,8 @@ PRE(thread_fast_set_cthread_self)
    Added for OSX 10.7 (Lion)
    ------------------------------------------------------------------ */
 
+#if DARWIN_VERS >= DARWIN_10_7
+
 PRE(getaudit_addr)
 {
    PRINT("getaudit_addr(%#lx, %lu)", ARG1, ARG2);
@@ -7808,6 +7876,89 @@ POST(psynch_cvclrprepost)
 {
 }
 
+#endif /* DARWIN_VERS >= DARWIN_10_7 */
+
+
+/* ---------------------------------------------------------------------
+   Added for OSX 10.8 (Mountain Lion)
+   ------------------------------------------------------------------ */
+
+#if DARWIN_VERS >= DARWIN_10_8
+
+PRE(mach__10)
+{
+   PRINT("mach__10(FIXME,ARGUMENTS_UNKNOWN)");
+}
+POST(mach__10)
+{
+   ML_(sync_mappings)("after", "mach__10", 0);
+}
+
+PRE(mach__12)
+{
+   PRINT("mach__12(FIXME,ARGUMENTS_UNKNOWN)");
+}
+POST(mach__12)
+{
+   ML_(sync_mappings)("after", "mach__12", 0);
+}
+
+PRE(mach__14)
+{
+   PRINT("mach__14(FIXME,ARGUMENTS_UNKNOWN)");
+}
+
+PRE(mach__16)
+{
+   PRINT("mach__16(FIXME,ARGUMENTS_UNKNOWN)");
+}
+
+PRE(mach__17)
+{
+   PRINT("mach__17(FIXME,ARGUMENTS_UNKNOWN)");
+}
+
+PRE(mach__18)
+{
+   PRINT("mach__18(FIXME,ARGUMENTS_UNKNOWN)");
+}
+
+PRE(mach__19)
+{
+   PRINT("mach__19(FIXME,ARGUMENTS_UNKNOWN)");
+}
+
+PRE(mach__20)
+{
+   PRINT("mach__20(FIXME,ARGUMENTS_UNKNOWN)");
+}
+
+PRE(mach__21)
+{
+   PRINT("mach__21(FIXME,ARGUMENTS_UNKNOWN)");
+}
+
+PRE(mach__22)
+{
+   PRINT("mach__22(FIXME,ARGUMENTS_UNKNOWN)");
+}
+
+PRE(mach__23)
+{
+   PRINT("mach__23(FIXME,ARGUMENTS_UNKNOWN)");
+}
+
+PRE(iopolicysys)
+{
+   PRINT("iopolicysys(FIXME)(0x%lx, 0x%lx, 0x%lx)", ARG1, ARG2, ARG3);
+   /* mem effects unknown */
+}
+POST(iopolicysys)
+{
+}
+
+#endif /* DARWIN_VERS >= DARWIN_10_8 */
+
 
 /* ---------------------------------------------------------------------
    syscall tables
@@ -7816,10 +7967,11 @@ POST(psynch_cvclrprepost)
 /* Add a Darwin-specific, arch-independent wrapper to a syscall table. */
 #define MACX_(sysno, name)    WRAPPER_ENTRY_X_(darwin, VG_DARWIN_SYSNO_INDEX(sysno), name) 
 #define MACXY(sysno, name)    WRAPPER_ENTRY_XY(darwin, VG_DARWIN_SYSNO_INDEX(sysno), name)
-#define _____(sysno) GENX_(sysno, sys_ni_syscall)
+#define _____(sysno) GENX_(sysno, sys_ni_syscall)  /* UNIX style only */
 
 /*
-     _____ : unsupported by the kernel (sys_ni_syscall)
+     _____ : unsupported by the kernel (sys_ni_syscall) (UNIX-style only)
+             unfortunately misused for Mach too, causing assertion failures
   // _____ : unimplemented in valgrind
      GEN   : handlers are in syswrap-generic.c
      MAC   : handlers are in this file
@@ -8112,7 +8264,7 @@ const SyscallTableEntry ML_(syscall_table)[] = {
    MACXY(__NR_shmdt,       shmdt), 
    MACX_(__NR_shmget,      shmget), 
    MACXY(__NR_shm_open,    shm_open), 
-// _____(__NR_shm_unlink), 
+   MACXY(__NR_shm_unlink,  shm_unlink), 
    MACX_(__NR_sem_open,    sem_open), 
    MACX_(__NR_sem_close,   sem_close), 
    MACX_(__NR_sem_unlink,  sem_unlink), 
@@ -8131,7 +8283,9 @@ const SyscallTableEntry ML_(syscall_table)[] = {
    MACX_(__NR_fchmod_extended,fchmod_extended), 
    MACXY(__NR_access_extended,access_extended), 
    MACX_(__NR_settid,         settid), 
-// _____(__NR_gettid), 
+#if DARWIN_VERS >= DARWIN_10_8
+   MACX_(__NR_gettid, gettid),  // 286
+#endif
 // _____(__NR_setsgroups), 
 // _____(__NR_getsgroups), 
 // _____(__NR_setwgroups), 
@@ -8171,7 +8325,9 @@ const SyscallTableEntry ML_(syscall_table)[] = {
    MACX_(__NR_aio_write,      aio_write), 
 // _____(__NR_lio_listio),   // 320
    _____(VG_DARWIN_SYSCALL_CONSTRUCT_UNIX(321)),   // ???
-// _____(__NR_iopolicysys), 
+#if DARWIN_VERS >= DARWIN_10_8
+   MACXY(__NR_iopolicysys, iopolicysys), 
+#endif
    _____(VG_DARWIN_SYSCALL_CONSTRUCT_UNIX(323)),   // ???
 // _____(__NR_mlockall), 
 // _____(__NR_munlockall), 
@@ -8314,20 +8470,51 @@ const SyscallTableEntry ML_(mach_trap_table)[] = {
    _____(VG_DARWIN_SYSCALL_CONSTRUCT_MACH(7)), 
    _____(VG_DARWIN_SYSCALL_CONSTRUCT_MACH(8)), 
    _____(VG_DARWIN_SYSCALL_CONSTRUCT_MACH(9)), 
+
+#  if DARWIN_VERS >= DARWIN_10_8
+   MACXY(VG_DARWIN_SYSCALL_CONSTRUCT_MACH(10), mach__10), 
+#  else
    _____(VG_DARWIN_SYSCALL_CONSTRUCT_MACH(10)), 
+#  endif
+
    _____(VG_DARWIN_SYSCALL_CONSTRUCT_MACH(11)), 
+
+#  if DARWIN_VERS >= DARWIN_10_8
+   MACXY(VG_DARWIN_SYSCALL_CONSTRUCT_MACH(12), mach__12), 
+#  else
    _____(VG_DARWIN_SYSCALL_CONSTRUCT_MACH(12)), 
+#  endif
+
    _____(VG_DARWIN_SYSCALL_CONSTRUCT_MACH(13)), 
+
+#  if DARWIN_VERS >= DARWIN_10_8
+   MACX_(VG_DARWIN_SYSCALL_CONSTRUCT_MACH(14), mach__14), 
+#  else
    _____(VG_DARWIN_SYSCALL_CONSTRUCT_MACH(14)), 
+#  endif
+
    _____(VG_DARWIN_SYSCALL_CONSTRUCT_MACH(15)), 
+
+#  if DARWIN_VERS >= DARWIN_10_8
+   MACX_(VG_DARWIN_SYSCALL_CONSTRUCT_MACH(16), mach__16), 
+   MACX_(VG_DARWIN_SYSCALL_CONSTRUCT_MACH(17), mach__17), 
+   MACX_(VG_DARWIN_SYSCALL_CONSTRUCT_MACH(18), mach__18), 
+   MACX_(VG_DARWIN_SYSCALL_CONSTRUCT_MACH(19), mach__19), 
+   MACX_(VG_DARWIN_SYSCALL_CONSTRUCT_MACH(20), mach__20),
+   MACX_(VG_DARWIN_SYSCALL_CONSTRUCT_MACH(21), mach__21), 
+   MACX_(VG_DARWIN_SYSCALL_CONSTRUCT_MACH(22), mach__22), 
+   MACX_(VG_DARWIN_SYSCALL_CONSTRUCT_MACH(23), mach__23), 
+#  else
    _____(VG_DARWIN_SYSCALL_CONSTRUCT_MACH(16)), 
    _____(VG_DARWIN_SYSCALL_CONSTRUCT_MACH(17)), 
    _____(VG_DARWIN_SYSCALL_CONSTRUCT_MACH(18)), 
    _____(VG_DARWIN_SYSCALL_CONSTRUCT_MACH(19)), 
-   _____(VG_DARWIN_SYSCALL_CONSTRUCT_MACH(20)),   // -20
+   _____(VG_DARWIN_SYSCALL_CONSTRUCT_MACH(20)), 
    _____(VG_DARWIN_SYSCALL_CONSTRUCT_MACH(21)), 
    _____(VG_DARWIN_SYSCALL_CONSTRUCT_MACH(22)), 
    _____(VG_DARWIN_SYSCALL_CONSTRUCT_MACH(23)), 
+#  endif
+
    _____(VG_DARWIN_SYSCALL_CONSTRUCT_MACH(24)), 
    _____(VG_DARWIN_SYSCALL_CONSTRUCT_MACH(25)), 
    MACXY(__NR_mach_reply_port, mach_reply_port), 

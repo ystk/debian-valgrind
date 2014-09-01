@@ -1,5 +1,3 @@
-/* -*- mode: C; c-basic-offset: 3; indent-tabs-mode: nil; -*- */
-
 /*--------------------------------------------------------------------*/
 /*--- Client-space code for DRD.          drd_pthread_intercepts.c ---*/
 /*--------------------------------------------------------------------*/
@@ -7,7 +5,7 @@
 /*
   This file is part of DRD, a thread error detector.
 
-  Copyright (C) 2006-2011 Bart Van Assche <bvanassche@acm.org>.
+  Copyright (C) 2006-2013 Bart Van Assche <bvanassche@acm.org>.
 
   This program is free software; you can redistribute it and/or
   modify it under the terms of the GNU General Public License as
@@ -138,7 +136,9 @@ static int never_true;
 /* Local data structures. */
 
 typedef struct {
-   volatile int counter;
+   pthread_mutex_t mutex;
+   int counter;
+   int waiters;
 } DrdSema;
 
 typedef struct
@@ -146,7 +146,7 @@ typedef struct
    void* (*start)(void*);
    void* arg;
    int   detachstate;
-   DrdSema wrapper_started;
+   DrdSema* wrapper_started;
 } DrdPosixThreadArgs;
 
 
@@ -182,44 +182,58 @@ static void DRD_(init)(void)
 static void DRD_(sema_init)(DrdSema* sema)
 {
    DRD_IGNORE_VAR(sema->counter);
+   pthread_mutex_init(&sema->mutex, NULL);
    sema->counter = 0;
+   sema->waiters = 0;
 }
 
 static void DRD_(sema_destroy)(DrdSema* sema)
 {
+   pthread_mutex_destroy(&sema->mutex);
 }
 
 static void DRD_(sema_down)(DrdSema* sema)
 {
    int res = ENOSYS;
 
-   while (sema->counter == 0) {
+   pthread_mutex_lock(&sema->mutex);
+   if (sema->counter == 0) {
+      sema->waiters++;
+      while (sema->counter == 0) {
+         pthread_mutex_unlock(&sema->mutex);
 #ifdef HAVE_USABLE_LINUX_FUTEX_H
-      if (syscall(__NR_futex, (UWord)&sema->counter,
-                  FUTEX_WAIT | FUTEX_PRIVATE_FLAG, 0) == 0)
-         res = 0;
-      else
-         res = errno;
+         if (syscall(__NR_futex, (UWord)&sema->counter,
+                     FUTEX_WAIT | FUTEX_PRIVATE_FLAG, 0) == 0)
+            res = 0;
+         else
+            res = errno;
 #endif
-      /*
-       * Invoke sched_yield() on non-Linux systems, if the futex syscall has
-       * not been invoked or if this code has been built on a Linux system
-       * where __NR_futex is defined and is run on a Linux system that does
-       * not support the futex syscall.
-       */
-      if (res != 0 && res != EWOULDBLOCK)
-         sched_yield();
+         /*
+          * Invoke sched_yield() on non-Linux systems, if the futex syscall has
+          * not been invoked or if this code has been built on a Linux system
+          * where __NR_futex is defined and is run on a Linux system that does
+          * not support the futex syscall.
+          */
+         if (res != 0 && res != EWOULDBLOCK)
+            sched_yield();
+         pthread_mutex_lock(&sema->mutex);
+      }
+      sema->waiters--;
    }
    sema->counter--;
+   pthread_mutex_unlock(&sema->mutex);
 }
 
 static void DRD_(sema_up)(DrdSema* sema)
 {
+   pthread_mutex_lock(&sema->mutex);
    sema->counter++;
 #ifdef HAVE_USABLE_LINUX_FUTEX_H
-   syscall(__NR_futex, (UWord)&sema->counter,
-           FUTEX_WAKE | FUTEX_PRIVATE_FLAG, 1);
+   if (sema->waiters > 0)
+      syscall(__NR_futex, (UWord)&sema->counter,
+              FUTEX_WAKE | FUTEX_PRIVATE_FLAG, 1);
 #endif
+   pthread_mutex_unlock(&sema->mutex);
 }
 
 /**
@@ -336,7 +350,7 @@ static void* DRD_(thread_wrapper)(void* arg)
     * DRD_(set_joinable)() have been invoked to avoid a race with
     * a pthread_detach() invocation for this thread from another thread.
     */
-   DRD_(sema_up)(&arg_ptr->wrapper_started);
+   DRD_(sema_up)(arg_copy.wrapper_started);
 
    return (arg_copy.start)(arg_copy.arg);
 }
@@ -353,7 +367,7 @@ static int DRD_(detected_linuxthreads)(void)
 #if defined(linux)
 #if defined(_CS_GNU_LIBPTHREAD_VERSION)
    /* Linux with a recent glibc. */
-   char buffer[256];
+   HChar buffer[256];
    unsigned len;
    len = confstr(_CS_GNU_LIBPTHREAD_VERSION, buffer, sizeof(buffer));
    assert(len <= sizeof(buffer));
@@ -432,13 +446,15 @@ int pthread_create_intercept(pthread_t* thread, const pthread_attr_t* attr,
 {
    int    ret;
    OrigFn fn;
+   DrdSema wrapper_started;
    DrdPosixThreadArgs thread_args;
 
    VALGRIND_GET_ORIG_FN(fn);
 
+   DRD_(sema_init)(&wrapper_started);
    thread_args.start           = start;
    thread_args.arg             = arg;
-   DRD_(sema_init)(&thread_args.wrapper_started);
+   thread_args.wrapper_started = &wrapper_started;
    /*
     * Find out whether the thread will be started as a joinable thread
     * or as a detached thread. If no thread attributes have been specified,
@@ -457,13 +473,12 @@ int pthread_create_intercept(pthread_t* thread, const pthread_attr_t* attr,
    CALL_FN_W_WWWW(ret, fn, thread, attr, DRD_(thread_wrapper), &thread_args);
    DRD_(left_pthread_create)();
 
-   if (ret == 0)
-   {
+   if (ret == 0) {
       /* Wait until the thread wrapper started. */
-      DRD_(sema_down)(&thread_args.wrapper_started);
+      DRD_(sema_down)(&wrapper_started);
    }
 
-   DRD_(sema_destroy)(&thread_args.wrapper_started);
+   DRD_(sema_destroy)(&wrapper_started);
 
    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__DRD_START_NEW_SEGMENT,
                                    pthread_self(), 0, 0, 0, 0);
@@ -702,7 +717,7 @@ int pthread_cond_destroy_intercept(pthread_cond_t* cond)
                                    cond, 0, 0, 0, 0);
    CALL_FN_W_W(ret, fn, cond);
    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__POST_COND_DESTROY,
-                                   cond, 0, 0, 0, 0);
+                                   cond, ret==0, 0, 0, 0);
    return ret;
 }
 
@@ -788,7 +803,8 @@ int pthread_cond_broadcast_intercept(pthread_cond_t* cond)
 PTH_FUNCS(int, pthreadZucondZubroadcast, pthread_cond_broadcast_intercept,
           (pthread_cond_t* cond), (cond));
 
-#if defined(HAVE_PTHREAD_SPIN_LOCK)
+#if defined(HAVE_PTHREAD_SPIN_LOCK) \
+    && !defined(DISABLE_PTHREAD_SPINLOCK_INTERCEPT)
 static __always_inline
 int pthread_spin_init_intercept(pthread_spinlock_t *spinlock, int pshared)
 {

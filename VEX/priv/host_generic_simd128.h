@@ -7,7 +7,7 @@
    This file is part of Valgrind, a dynamic binary instrumentation
    framework.
 
-   Copyright (C) 2010-2011 OpenWorks GbR
+   Copyright (C) 2010-2013 OpenWorks GbR
       info@open-works.net
 
    This program is free software; you can redistribute it and/or
@@ -82,6 +82,12 @@ extern VEX_REGPARM(3)
 extern VEX_REGPARM(3)
        void h_generic_calc_NarrowBin32to16x8
                                       ( /*OUT*/V128*, V128*, V128* );
+
+extern VEX_REGPARM(3)
+       void h_generic_calc_Perm32x4   ( /*OUT*/V128*, V128*, V128* );
+
+extern /*not-regparm*/
+       UInt  h_generic_calc_GetMSBs8x16 ( ULong w64hi, ULong w64lo );
 
 #endif /* ndef __VEX_HOST_GENERIC_SIMD128_H */
 

@@ -49,7 +49,7 @@ pool *make_pool( int use_mmap )
 
    p->size = p->left = SUPERBLOCK_SIZE;
    p->levels = NULL;
-   VALGRIND_MAKE_MEM_NOACCESS(p->where, SUPERBLOCK_SIZE);
+   (void) VALGRIND_MAKE_MEM_NOACCESS(p->where, SUPERBLOCK_SIZE);
    return p;
 }
 
@@ -75,7 +75,7 @@ void pop(pool *p, int use_mmap)
    level_list *l = p->levels;
    p->levels = l->next;
    VALGRIND_DESTROY_MEMPOOL(l->where);
-   VALGRIND_MAKE_MEM_NOACCESS(l->where, p->where-l->where);
+   (void) VALGRIND_MAKE_MEM_NOACCESS(l->where, p->where-l->where);
    p->where = l->where;
    if (use_mmap)
       munmap(l, sizeof(level_list));
@@ -158,6 +158,28 @@ void test(void)
            "\n------ double free in mmap-backed pool ------\n\n");
    VALGRIND_MEMPOOL_FREE(p2, x2);
 
+   {
+      // test that redzone are still protected even if the user forgets
+      // to mark the superblock noaccess.
+      char superblock[100];
+
+      VALGRIND_CREATE_MEMPOOL(superblock, REDZONE_SIZE, 0);
+      // User should mark the superblock no access to benefit
+      // from full Valgrind memcheck protection.
+      // VALGRIND_MEMPOOL_ALLOC will however still ensure the
+      // redzones are protected.
+      VALGRIND_MEMPOOL_ALLOC(superblock, superblock+30, 10);
+
+      res += superblock[30]; // valid
+      res += superblock[39]; // valid
+
+      fprintf(stderr,
+              "\n------ 2 invalid access in 'no no-access superblock' ---\n\n");
+      res += superblock[29]; // invalid
+      res += superblock[40]; // invalid
+
+      VALGRIND_DESTROY_MEMPOOL(superblock);
+   }
    // claim res is used, so gcc can't nuke this all
    __asm__ __volatile__("" : : "r"(res));
 

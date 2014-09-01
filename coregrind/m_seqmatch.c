@@ -8,7 +8,7 @@
    This file is part of Valgrind, a dynamic binary instrumentation
    framework.
 
-   Copyright (C) 2008-2011 OpenWorks Ltd
+   Copyright (C) 2008-2013 OpenWorks Ltd
       info@open-works.co.uk
 
    This program is free software; you can redistribute it and/or
@@ -41,11 +41,12 @@
 /* See detailed comment in include/pub_tool_seqmatch.h about this. */
 Bool VG_(generic_match) ( 
         Bool matchAll,
-        void* patt,  SizeT szbPatt,  UWord nPatt,  UWord ixPatt,
-        void* input, SizeT szbInput, UWord nInput, UWord ixInput,
-        Bool (*pIsStar)(void*),
-        Bool (*pIsQuery)(void*),
-        Bool (*pattEQinp)(void*,void*)
+        const void* patt,  SizeT szbPatt,  UWord nPatt,  UWord ixPatt,
+        const void* input, SizeT szbInput, UWord nInput, UWord ixInput,
+        Bool (*pIsStar)(const void*),
+        Bool (*pIsQuery)(const void*),
+        Bool (*pattEQinp)(const void*,const void*,void*,UWord),
+        void* inputCompleter
      )
 {
    /* This is the spec, written in my favourite formal specification
@@ -64,7 +65,7 @@ Bool VG_(generic_match) (
       ma []       []     = True
    */
    Bool  havePatt, haveInput;
-   void  *currPatt, *currInput;
+   const HChar *currPatt, *currInput;
   tailcall:
    vg_assert(nPatt >= 0   && nPatt  < 1000000); /* arbitrary */
    vg_assert(nInput >= 0  && nInput < 1000000); /* arbitrary */
@@ -77,8 +78,8 @@ Bool VG_(generic_match) (
    /* No specific need to set NULL when !have{Patt,Input}, but guards
       against inadvertantly dereferencing an out of range pointer to
       the pattern or input arrays. */
-   currPatt  = havePatt  ? ((Char*)patt) + szbPatt * ixPatt    : NULL;
-   currInput = haveInput ? ((Char*)input) + szbInput * ixInput : NULL;
+   currPatt  = havePatt  ? ((const HChar*)patt) + szbPatt * ixPatt    : NULL;
+   currInput = haveInput ? ((const HChar*)input) + szbInput * ixInput : NULL;
 
    // Deal with the complex case first: wildcards.  Do frugal
    // matching.  When encountering a '*', first skip no characters
@@ -102,7 +103,8 @@ Bool VG_(generic_match) (
          if (VG_(generic_match)( matchAll,
                                  patt, szbPatt, nPatt,  ixPatt+1,
                                  input,szbInput,nInput, ixInput+0,
-                                 pIsStar,pIsQuery,pattEQinp) ) {
+                                 pIsStar,pIsQuery,pattEQinp,
+                                 inputCompleter) ) {
             return True;
          }
          // but we can tail-recurse for the second call
@@ -129,7 +131,7 @@ Bool VG_(generic_match) (
    //
    // ma (p:ps)   (i:is) = p == i && ma ps is
    if (havePatt && haveInput) {
-      if (!pattEQinp(currPatt,currInput)) return False;
+      if (!pattEQinp(currPatt,currInput,inputCompleter,ixInput)) return False;
       ixPatt++; ixInput++; goto tailcall;
    }
 
@@ -161,21 +163,23 @@ Bool VG_(generic_match) (
 /* And a parameterization of the above, to make it do
    string matching.
 */
-static Bool charIsStar  ( void* pV ) { return *(Char*)pV == '*'; }
-static Bool charIsQuery ( void* pV ) { return *(Char*)pV == '?'; }
-static Bool char_p_EQ_i ( void* pV, void* cV ) {
-   Char p = *(Char*)pV;
-   Char c = *(Char*)cV;
+static Bool charIsStar  ( const void* pV ) { return *(const HChar*)pV == '*'; }
+static Bool charIsQuery ( const void* pV ) { return *(const HChar*)pV == '?'; }
+static Bool char_p_EQ_i ( const void* pV, const void* cV,
+                          void* null_completer, UWord ixcV ) {
+   HChar p = *(const HChar*)pV;
+   HChar c = *(const HChar*)cV;
    vg_assert(p != '*' && p != '?');
    return p == c;
 }
-Bool VG_(string_match) ( const Char* patt, const Char* input )
+Bool VG_(string_match) ( const HChar* patt, const HChar* input )
 {
    return VG_(generic_match)(
              True/* match-all */,
-             (void*)patt,  sizeof(UChar), VG_(strlen)(patt), 0,
-             (void*)input, sizeof(UChar), VG_(strlen)(input), 0,
-             charIsStar, charIsQuery, char_p_EQ_i
+             patt,  sizeof(HChar), VG_(strlen)(patt), 0,
+             input, sizeof(HChar), VG_(strlen)(input), 0,
+             charIsStar, charIsQuery, char_p_EQ_i,
+             NULL
           );
 }
 

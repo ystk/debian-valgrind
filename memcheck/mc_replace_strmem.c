@@ -9,7 +9,7 @@
    This file is part of MemCheck, a heavyweight Valgrind tool for
    detecting memory errors.
 
-   Copyright (C) 2000-2011 Julian Seward 
+   Copyright (C) 2000-2013 Julian Seward 
       jseward@acm.org
 
    This program is free software; you can redistribute it and/or
@@ -31,10 +31,11 @@
 */
 
 #include "pub_tool_basics.h"
+#include "pub_tool_poolalloc.h"
 #include "pub_tool_hashtable.h"
 #include "pub_tool_redir.h"
 #include "pub_tool_tooliface.h"
-#include "valgrind.h"
+#include "pub_tool_clreq.h"
 
 #include "mc_include.h"
 #include "memcheck.h"
@@ -94,6 +95,13 @@
    20330 STRCSPN
    20340 STRSPN
    20350 STRCASESTR
+   20360 MEMRCHR
+   20370 WCSLEN
+   20380 WCSCMP
+   20390 WCSCPY
+   20400 WCSCHR
+   20410 WCSRCHR
+   20420 STPNCPY
 */
 
 
@@ -140,6 +148,9 @@ static inline void my_exit ( int x )
 #  if defined(VGPV_arm_linux_android)
    __asm__ __volatile__(".word 0xFFFFFFFF");
    while (1) {}
+#  elif defined(VGPV_x86_linux_android)
+   __asm__ __volatile__("ud2");
+   while (1) {}
 #  else
    extern __attribute__ ((__noreturn__)) void _exit(int status);
    _exit(x);
@@ -161,12 +172,12 @@ static inline void my_exit ( int x )
    char* VG_REPLACE_FUNCTION_EZU(20010,soname,fnname)( const char* s, int c ); \
    char* VG_REPLACE_FUNCTION_EZU(20010,soname,fnname)( const char* s, int c ) \
    { \
-      UChar  ch   = (UChar)((UInt)c); \
-      UChar* p    = (UChar*)s; \
-      UChar* last = NULL; \
+      HChar ch = (HChar)c;   \
+      const HChar* p = s;       \
+      const HChar* last = NULL; \
       while (True) { \
          if (*p == ch) last = p; \
-         if (*p == 0) return last; \
+         if (*p == 0) return (HChar *)last;     \
          p++; \
       } \
    }
@@ -177,6 +188,9 @@ static inline void my_exit ( int x )
  STRRCHR(VG_Z_LIBC_SONAME,   rindex)
  STRRCHR(VG_Z_LIBC_SONAME,   __GI_strrchr)
  STRRCHR(VG_Z_LD_LINUX_SO_2, rindex)
+#if defined(VGPV_arm_linux_android) || defined(VGPV_x86_linux_android)
+  STRRCHR(NONE, __dl_strrchr); /* in /system/bin/linker */
+#endif
 
 #elif defined(VGO_darwin)
  //STRRCHR(VG_Z_LIBC_SONAME,   strrchr)
@@ -194,10 +208,10 @@ static inline void my_exit ( int x )
    char* VG_REPLACE_FUNCTION_EZU(20020,soname,fnname) ( const char* s, int c ); \
    char* VG_REPLACE_FUNCTION_EZU(20020,soname,fnname) ( const char* s, int c ) \
    { \
-      UChar  ch = (UChar)((UInt)c); \
-      UChar* p  = (UChar*)s; \
+      HChar  ch = (HChar)c ; \
+      const HChar* p  = s;   \
       while (True) { \
-         if (*p == ch) return p; \
+         if (*p == ch) return (HChar *)p; \
          if (*p == 0) return NULL; \
          p++; \
       } \
@@ -233,8 +247,8 @@ static inline void my_exit ( int x )
    char* VG_REPLACE_FUNCTION_EZU(20030,soname,fnname) \
             ( char* dst, const char* src ) \
    { \
-      const Char* src_orig = src; \
-            Char* dst_orig = dst; \
+      const HChar* src_orig = src; \
+            HChar* dst_orig = dst; \
       while (*dst) dst++; \
       while (*src) *dst++ = *src++; \
       *dst = 0; \
@@ -268,8 +282,8 @@ static inline void my_exit ( int x )
    char* VG_REPLACE_FUNCTION_EZU(20040,soname,fnname) \
             ( char* dst, const char* src, SizeT n ) \
    { \
-      const Char* src_orig = src; \
-            Char* dst_orig = dst; \
+      const HChar* src_orig = src; \
+            HChar* dst_orig = dst; \
       SizeT m = 0; \
       \
       while (*dst) dst++; \
@@ -310,8 +324,8 @@ static inline void my_exit ( int x )
    SizeT VG_REPLACE_FUNCTION_EZU(20050,soname,fnname) \
         ( char* dst, const char* src, SizeT n ) \
    { \
-      const Char* src_orig = src; \
-      Char* dst_orig = dst; \
+      const HChar* src_orig = src; \
+      HChar* dst_orig = dst; \
       SizeT m = 0; \
       \
       while (m < n && *dst) { m++; dst++; } \
@@ -389,7 +403,7 @@ static inline void my_exit ( int x )
 #if defined(VGO_linux)
  STRLEN(VG_Z_LIBC_SONAME,          strlen)
  STRLEN(VG_Z_LIBC_SONAME,          __GI_strlen)
-# if defined(VGPV_arm_linux_android)
+# if defined(VGPV_arm_linux_android) || defined(VGPV_x86_linux_android)
   STRLEN(NONE, __dl_strlen); /* in /system/bin/linker */
 # endif
 
@@ -408,8 +422,8 @@ static inline void my_exit ( int x )
    char* VG_REPLACE_FUNCTION_EZU(20080,soname,fnname) \
       ( char* dst, const char* src ) \
    { \
-      const Char* src_orig = src; \
-            Char* dst_orig = dst; \
+      const HChar* src_orig = src; \
+            HChar* dst_orig = dst; \
       \
       while (*src) *dst++ = *src++; \
       *dst = 0; \
@@ -445,8 +459,8 @@ static inline void my_exit ( int x )
    char* VG_REPLACE_FUNCTION_EZU(20090,soname,fnname) \
             ( char* dst, const char* src, SizeT n ) \
    { \
-      const Char* src_orig = src; \
-            Char* dst_orig = dst; \
+      const HChar* src_orig = src; \
+            HChar* dst_orig = dst; \
       SizeT m = 0; \
       \
       while (m   < n && *src) { m++; *dst++ = *src++; } \
@@ -481,8 +495,8 @@ static inline void my_exit ( int x )
    SizeT VG_REPLACE_FUNCTION_EZU(20100,soname,fnname) \
        ( char* dst, const char* src, SizeT n ) \
    { \
-      const char* src_orig = src; \
-      char* dst_orig = dst; \
+      const HChar* src_orig = src; \
+      HChar* dst_orig = dst; \
       SizeT m = 0; \
       \
       while (m < n-1 && *src) { m++; *dst++ = *src++; } \
@@ -499,6 +513,10 @@ static inline void my_exit ( int x )
    }
 
 #if defined(VGO_linux)
+
+#if defined(VGPV_arm_linux_android) || defined(VGPV_x86_linux_android)
+ STRLCPY(VG_Z_LIBC_SONAME, strlcpy);
+#endif
 
 #elif defined(VGO_darwin)
  //STRLCPY(VG_Z_LIBC_SONAME, strlcpy)
@@ -523,8 +541,8 @@ static inline void my_exit ( int x )
          if (*s1 == 0) return -1; \
          if (*s2 == 0) return 1; \
          \
-         if (*(unsigned char*)s1 < *(unsigned char*)s2) return -1; \
-         if (*(unsigned char*)s1 > *(unsigned char*)s2) return 1; \
+         if (*(const UChar*)s1 < *(const UChar*)s2) return -1; \
+         if (*(const UChar*)s1 > *(const UChar*)s2) return 1; \
          \
          s1++; s2++; n++; \
       } \
@@ -551,22 +569,22 @@ static inline void my_exit ( int x )
           ( const char* s1, const char* s2 ) \
    { \
       extern int tolower(int); \
-      register unsigned char c1; \
-      register unsigned char c2; \
+      register UChar c1; \
+      register UChar c2; \
       while (True) { \
-         c1 = tolower(*(unsigned char *)s1); \
-         c2 = tolower(*(unsigned char *)s2); \
+         c1 = tolower(*(const UChar *)s1); \
+         c2 = tolower(*(const UChar *)s2); \
          if (c1 != c2) break; \
          if (c1 == 0) break; \
          s1++; s2++; \
       } \
-      if ((unsigned char)c1 < (unsigned char)c2) return -1; \
-      if ((unsigned char)c1 > (unsigned char)c2) return 1; \
+      if ((UChar)c1 < (UChar)c2) return -1; \
+      if ((UChar)c1 > (UChar)c2) return 1; \
       return 0; \
    }
 
 #if defined(VGO_linux)
-# if !defined(VGPV_arm_linux_android)
+# if !defined(VGPV_arm_linux_android) && !defined(VGPV_x86_linux_android)
   STRCASECMP(VG_Z_LIBC_SONAME, strcasecmp)
   STRCASECMP(VG_Z_LIBC_SONAME, __GI_strcasecmp)
 # endif
@@ -593,17 +611,17 @@ static inline void my_exit ( int x )
          if (*s1 == 0) return -1; \
          if (*s2 == 0) return 1; \
          \
-         if (tolower(*(unsigned char*)s1) \
-             < tolower(*(unsigned char*)s2)) return -1; \
-         if (tolower(*(unsigned char*)s1) \
-             > tolower(*(unsigned char*)s2)) return 1; \
+         if (tolower(*(const UChar *)s1) \
+             < tolower(*(const UChar*)s2)) return -1; \
+         if (tolower(*(const UChar *)s1) \
+             > tolower(*(const UChar *)s2)) return 1; \
          \
          s1++; s2++; n++; \
       } \
    }
 
 #if defined(VGO_linux)
-# if !defined(VGPV_arm_linux_android)
+# if !defined(VGPV_arm_linux_android) && !defined(VGPV_x86_linux_android)
   STRNCASECMP(VG_Z_LIBC_SONAME, strncasecmp)
   STRNCASECMP(VG_Z_LIBC_SONAME, __GI_strncasecmp)
 # endif
@@ -624,17 +642,17 @@ static inline void my_exit ( int x )
           ( const char* s1, const char* s2, void* locale ) \
    { \
       extern int tolower_l(int, void*) __attribute__((weak)); \
-      register unsigned char c1; \
-      register unsigned char c2; \
+      register UChar c1; \
+      register UChar c2; \
       while (True) { \
-         c1 = tolower_l(*(unsigned char *)s1, locale); \
-         c2 = tolower_l(*(unsigned char *)s2, locale); \
+         c1 = tolower_l(*(const UChar *)s1, locale); \
+         c2 = tolower_l(*(const UChar *)s2, locale); \
          if (c1 != c2) break; \
          if (c1 == 0) break; \
          s1++; s2++; \
       } \
-      if ((unsigned char)c1 < (unsigned char)c2) return -1; \
-      if ((unsigned char)c1 > (unsigned char)c2) return 1; \
+      if ((UChar)c1 < (UChar)c2) return -1; \
+      if ((UChar)c1 > (UChar)c2) return 1; \
       return 0; \
    }
 
@@ -665,10 +683,10 @@ static inline void my_exit ( int x )
          if (*s1 == 0) return -1; \
          if (*s2 == 0) return 1; \
          \
-         if (tolower_l(*(unsigned char*)s1, locale) \
-             < tolower_l(*(unsigned char*)s2, locale)) return -1; \
-         if (tolower_l(*(unsigned char*)s1, locale) \
-             > tolower_l(*(unsigned char*)s2, locale)) return 1; \
+         if (tolower_l(*(const UChar *)s1, locale) \
+             < tolower_l(*(const UChar *)s2, locale)) return -1; \
+         if (tolower_l(*(const UChar *)s1, locale) \
+             > tolower_l(*(const UChar *)s2, locale)) return 1; \
          \
          s1++; s2++; n++; \
       } \
@@ -677,6 +695,7 @@ static inline void my_exit ( int x )
 #if defined(VGO_linux)
  STRNCASECMP_L(VG_Z_LIBC_SONAME, strncasecmp_l)
  STRNCASECMP_L(VG_Z_LIBC_SONAME, __GI_strncasecmp_l)
+ STRNCASECMP_L(VG_Z_LIBC_SONAME, __GI___strncasecmp_l)
 
 #elif defined(VGO_darwin)
  //STRNCASECMP_L(VG_Z_LIBC_SONAME, strncasecmp_l)
@@ -693,17 +712,17 @@ static inline void my_exit ( int x )
    int VG_REPLACE_FUNCTION_EZU(20160,soname,fnname) \
           ( const char* s1, const char* s2 ) \
    { \
-      register unsigned char c1; \
-      register unsigned char c2; \
+      register UChar c1; \
+      register UChar c2; \
       while (True) { \
-         c1 = *(unsigned char *)s1; \
-         c2 = *(unsigned char *)s2; \
+         c1 = *(const UChar *)s1; \
+         c2 = *(const UChar *)s2; \
          if (c1 != c2) break; \
          if (c1 == 0) break; \
          s1++; s2++; \
       } \
-      if ((unsigned char)c1 < (unsigned char)c2) return -1; \
-      if ((unsigned char)c1 > (unsigned char)c2) return 1; \
+      if ((UChar)c1 < (UChar)c2) return -1; \
+      if ((UChar)c1 > (UChar)c2) return 1; \
       return 0; \
    }
 
@@ -712,7 +731,7 @@ static inline void my_exit ( int x )
  STRCMP(VG_Z_LIBC_SONAME,          __GI_strcmp)
  STRCMP(VG_Z_LD_LINUX_X86_64_SO_2, strcmp)
  STRCMP(VG_Z_LD64_SO_1,            strcmp)
-# if defined(VGPV_arm_linux_android)
+# if defined(VGPV_arm_linux_android) || defined(VGPV_x86_linux_android)
   STRCMP(NONE, __dl_strcmp); /* in /system/bin/linker */
 # endif
 
@@ -745,6 +764,32 @@ static inline void my_exit ( int x )
 #elif defined(VGO_darwin)
  //MEMCHR(VG_Z_LIBC_SONAME, memchr)
  //MEMCHR(VG_Z_DYLD,        memchr)
+
+#endif
+
+
+/*---------------------- memrchr ----------------------*/
+
+#define MEMRCHR(soname, fnname) \
+   void* VG_REPLACE_FUNCTION_EZU(20360,soname,fnname) \
+            (const void *s, int c, SizeT n); \
+   void* VG_REPLACE_FUNCTION_EZU(20360,soname,fnname) \
+            (const void *s, int c, SizeT n) \
+   { \
+      SizeT i; \
+      UChar c0 = (UChar)c; \
+      UChar* p = (UChar*)s; \
+      for (i = 0; i < n; i++) \
+         if (p[n-1-i] == c0) return (void*)(&p[n-1-i]); \
+      return NULL; \
+   }
+
+#if defined(VGO_linux)
+ MEMRCHR(VG_Z_LIBC_SONAME, memrchr)
+
+#elif defined(VGO_darwin)
+ //MEMRCHR(VG_Z_LIBC_SONAME, memrchr)
+ //MEMRCHR(VG_Z_DYLD,        memrchr)
 
 #endif
 
@@ -849,8 +894,9 @@ static inline void my_exit ( int x )
  MEMCPY(NONE, ZuintelZufastZumemcpy)
 
 #elif defined(VGO_darwin)
- //MEMCPY(VG_Z_LIBC_SONAME,  memcpy)
- //MEMCPY(VG_Z_DYLD,         memcpy)
+# if DARWIN_VERS <= DARWIN_10_6
+  MEMCPY(VG_Z_LIBC_SONAME,  memcpy)
+# endif
  MEMCPY(VG_Z_LIBC_SONAME,  memcpyZDVARIANTZDsse3x) /* memcpy$VARIANT$sse3x */
  MEMCPY(VG_Z_LIBC_SONAME,  memcpyZDVARIANTZDsse42) /* memcpy$VARIANT$sse42 */
 
@@ -866,10 +912,10 @@ static inline void my_exit ( int x )
           ( const void *s1V, const void *s2V, SizeT n )  \
    { \
       int res; \
-      unsigned char a0; \
-      unsigned char b0; \
-      unsigned char* s1 = (unsigned char*)s1V; \
-      unsigned char* s2 = (unsigned char*)s2V; \
+      UChar a0; \
+      UChar b0; \
+      const UChar* s1 = s1V; \
+      const UChar* s2 = s2V; \
       \
       while (n != 0) { \
          a0 = s1[0]; \
@@ -908,8 +954,8 @@ static inline void my_exit ( int x )
    char* VG_REPLACE_FUNCTION_EZU(20200,soname,fnname) \
             ( char* dst, const char* src ) \
    { \
-      const Char* src_orig = src; \
-            Char* dst_orig = dst; \
+      const HChar* src_orig = src; \
+            HChar* dst_orig = dst; \
       \
       while (*src) *dst++ = *src++; \
       *dst = 0; \
@@ -938,6 +984,34 @@ static inline void my_exit ( int x )
 #endif
 
 
+/*---------------------- stpncpy ----------------------*/
+
+#define STPNCPY(soname, fnname) \
+   char* VG_REPLACE_FUNCTION_EZU(20420,soname,fnname) \
+            ( char* dst, const char* src, SizeT n ); \
+   char* VG_REPLACE_FUNCTION_EZU(20420,soname,fnname) \
+            ( char* dst, const char* src, SizeT n ) \
+   { \
+      const HChar* src_orig = src; \
+            HChar* dst_str  = dst; \
+      SizeT m = 0; \
+      \
+      while (m   < n && *src) { m++; *dst++ = *src++; } \
+      /* Check for overlap after copying; all n bytes of dst are relevant, */ \
+      /* but only m+1 bytes of src if terminator was found */ \
+      if (is_overlap(dst_str, src_orig, n, (m < n) ? m+1 : n)) \
+         RECORD_OVERLAP_ERROR("stpncpy", dst, src, n); \
+      dst_str = dst; \
+      while (m++ < n) *dst++ = 0;         /* must pad remainder with nulls */ \
+      \
+      return dst_str; \
+   }
+
+#if defined(VGO_linux)
+ STPNCPY(VG_Z_LIBC_SONAME, stpncpy)
+#endif
+
+
 /*---------------------- memset ----------------------*/
 
 /* Why are we bothering to intercept this?  It seems entirely
@@ -949,17 +1023,32 @@ static inline void my_exit ( int x )
    void* VG_REPLACE_FUNCTION_EZU(20210,soname,fnname) \
             (void *s, Int c, SizeT n) \
    { \
-      Addr a  = (Addr)s;   \
-      UInt c4 = (c & 0xFF); \
-      c4 = (c4 << 8) | c4; \
-      c4 = (c4 << 16) | c4; \
-      while ((a & 3) != 0 && n >= 1) \
-         { *(UChar*)a = (UChar)c; a += 1; n -= 1; } \
-      while (n >= 4) \
-         { *(UInt*)a = c4; a += 4; n -= 4; } \
-      while (n >= 1) \
-         { *(UChar*)a = (UChar)c; a += 1; n -= 1; } \
-      return s; \
+      if (sizeof(void*) == 8) { \
+         Addr  a  = (Addr)s;   \
+         ULong c8 = (c & 0xFF); \
+         c8 = (c8 << 8) | c8; \
+         c8 = (c8 << 16) | c8; \
+         c8 = (c8 << 32) | c8; \
+         while ((a & 7) != 0 && n >= 1) \
+            { *(UChar*)a = (UChar)c; a += 1; n -= 1; } \
+         while (n >= 8) \
+            { *(ULong*)a = c8; a += 8; n -= 8; } \
+         while (n >= 1) \
+            { *(UChar*)a = (UChar)c; a += 1; n -= 1; } \
+         return s; \
+      } else { \
+         Addr a  = (Addr)s;   \
+         UInt c4 = (c & 0xFF); \
+         c4 = (c4 << 8) | c4; \
+         c4 = (c4 << 16) | c4; \
+         while ((a & 3) != 0 && n >= 1) \
+            { *(UChar*)a = (UChar)c; a += 1; n -= 1; } \
+         while (n >= 4) \
+            { *(UInt*)a = c4; a += 4; n -= 4; } \
+         while (n >= 1) \
+            { *(UChar*)a = (UChar)c; a += 1; n -= 1; } \
+         return s; \
+      } \
    }
 
 #if defined(VGO_linux)
@@ -979,10 +1068,12 @@ static inline void my_exit ( int x )
 
 #if defined(VGO_linux)
  MEMMOVE(VG_Z_LIBC_SONAME, memmove)
+ MEMMOVE(VG_Z_LIBC_SONAME, __GI_memmove)
 
 #elif defined(VGO_darwin)
- //MEMMOVE(VG_Z_LIBC_SONAME, memmove)
- //MEMMOVE(VG_Z_DYLD,        memmove)#
+# if DARWIN_VERS <= DARWIN_10_6
+  MEMMOVE(VG_Z_LIBC_SONAME, memmove)
+# endif
  MEMMOVE(VG_Z_LIBC_SONAME,  memmoveZDVARIANTZDsse3x) /* memmove$VARIANT$sse3x */
  MEMMOVE(VG_Z_LIBC_SONAME,  memmoveZDVARIANTZDsse42) /* memmove$VARIANT$sse42 */
 
@@ -998,8 +1089,8 @@ static inline void my_exit ( int x )
             (const void *srcV, void *dstV, SizeT n) \
    { \
       SizeT i; \
-      Char* dst = (Char*)dstV; \
-      Char* src = (Char*)srcV; \
+      HChar* dst = dstV; \
+      const HChar* src = srcV; \
       if (dst < src) { \
          for (i = 0; i < n; i++) \
             dst[i] = src[i]; \
@@ -1012,6 +1103,7 @@ static inline void my_exit ( int x )
    }
 
 #if defined(VGO_linux)
+ BCOPY(VG_Z_LIBC_SONAME, bcopy)
 
 #elif defined(VGO_darwin)
  //BCOPY(VG_Z_LIBC_SONAME, bcopy)
@@ -1031,8 +1123,8 @@ static inline void my_exit ( int x )
             (void *dstV, const void *srcV, SizeT n, SizeT destlen) \
    { \
       SizeT i; \
-      Char* dst = (Char*)dstV; \
-      Char* src = (Char*)srcV; \
+      HChar* dst = dstV;        \
+      const HChar* src = srcV; \
       if (destlen < n) \
          goto badness; \
       if (dst < src) { \
@@ -1071,11 +1163,11 @@ static inline void my_exit ( int x )
    char* VG_REPLACE_FUNCTION_EZU(20250,soname,fnname) \
             (const char* s, int c_in) \
    { \
-      unsigned char  c        = (unsigned char) c_in; \
-      unsigned char* char_ptr = (unsigned char *)s; \
+      UChar  c        = (UChar) c_in; \
+      UChar* char_ptr = (UChar *)s; \
       while (1) { \
-         if (*char_ptr == 0) return char_ptr; \
-         if (*char_ptr == c) return char_ptr; \
+         if (*char_ptr == 0) return (HChar *)char_ptr;   \
+         if (*char_ptr == c) return (HChar *)char_ptr;   \
          char_ptr++; \
       } \
    }
@@ -1097,10 +1189,10 @@ static inline void my_exit ( int x )
    char* VG_REPLACE_FUNCTION_EZU(20260,soname,fnname) \
             (const char* s, int c_in) \
    { \
-      unsigned char  c        = (unsigned char) c_in; \
-      unsigned char* char_ptr = (unsigned char *)s; \
+      UChar  c        = (UChar) c_in; \
+      UChar* char_ptr = (UChar *)s; \
       while (1) { \
-         if (*char_ptr == c) return char_ptr; \
+        if (*char_ptr == c) return (HChar *)char_ptr;   \
          char_ptr++; \
       } \
    }
@@ -1124,7 +1216,7 @@ static inline void my_exit ( int x )
    char* VG_REPLACE_FUNCTION_EZU(20270,soname,fnname) \
             (char* dst, const char* src, SizeT len) \
    { \
-      char* ret = dst; \
+      HChar* ret = dst; \
       if (! len) \
          goto badness; \
       while ((*dst++ = *src++) != '\0') \
@@ -1190,8 +1282,8 @@ static inline void my_exit ( int x )
    void* VG_REPLACE_FUNCTION_EZU(20290,soname,fnname) \
             ( void *dst, const void *src, SizeT len ) \
    { \
-      register char *d; \
-      register char *s; \
+      register HChar *d; \
+      register HChar *s; \
       SizeT len_saved = len; \
       \
       if (len == 0) \
@@ -1234,8 +1326,8 @@ static inline void my_exit ( int x )
    void* VG_REPLACE_FUNCTION_EZU(20300,soname,fnname) \
             (void* dst, const void* src, SizeT len, SizeT dstlen ) \
    { \
-      register char *d; \
-      register char *s; \
+      register HChar *d; \
+      register const HChar *s; \
       \
       if (dstlen < len) goto badness; \
       \
@@ -1246,14 +1338,14 @@ static inline void my_exit ( int x )
          RECORD_OVERLAP_ERROR("memcpy_chk", dst, src, len); \
       \
       if ( dst > src ) { \
-         d = (char *)dst + len - 1; \
-         s = (char *)src + len - 1; \
+         d = (HChar *)dst + len - 1; \
+         s = (const HChar *)src + len - 1; \
          while ( len-- ) { \
             *d-- = *s--; \
          } \
       } else if ( dst < src ) { \
-         d = (char *)dst; \
-         s = (char *)src; \
+         d = (HChar *)dst; \
+         s = (const HChar *)src; \
          while ( len-- ) { \
             *d++ = *s++; \
          } \
@@ -1279,26 +1371,26 @@ static inline void my_exit ( int x )
 /*---------------------- strstr ----------------------*/
 
 #define STRSTR(soname, fnname) \
-   void* VG_REPLACE_FUNCTION_EZU(20310,soname,fnname) \
-         (void* haystack, void* needle); \
-   void* VG_REPLACE_FUNCTION_EZU(20310,soname,fnname) \
-         (void* haystack, void* needle) \
+   char* VG_REPLACE_FUNCTION_EZU(20310,soname,fnname) \
+         (const char* haystack, const char* needle); \
+   char* VG_REPLACE_FUNCTION_EZU(20310,soname,fnname) \
+         (const char* haystack, const char* needle) \
    { \
-      UChar* h = (UChar*)haystack; \
-      UChar* n = (UChar*)needle; \
+      const HChar* h = haystack; \
+      const HChar* n = needle; \
       \
       /* find the length of n, not including terminating zero */ \
       UWord nlen = 0; \
       while (n[nlen]) nlen++; \
       \
       /* if n is the empty string, match immediately. */ \
-      if (nlen == 0) return h; \
+      if (nlen == 0) return (HChar *)h;                  \
       \
       /* assert(nlen >= 1); */ \
-      UChar n0 = n[0]; \
+      HChar n0 = n[0]; \
       \
       while (1) { \
-         UChar hh = *h; \
+         const HChar hh = *h; \
          if (hh == 0) return NULL; \
          if (hh != n0) { h++; continue; } \
          \
@@ -1309,7 +1401,7 @@ static inline void my_exit ( int x )
          } \
          /* assert(i >= 0 && i <= nlen); */ \
          if (i == nlen) \
-            return h; \
+           return (HChar *)h;                   \
          \
          h++; \
       } \
@@ -1326,13 +1418,13 @@ static inline void my_exit ( int x )
 /*---------------------- strpbrk ----------------------*/
 
 #define STRPBRK(soname, fnname) \
-   void* VG_REPLACE_FUNCTION_EZU(20320,soname,fnname) \
-         (void* sV, void* acceptV); \
-   void* VG_REPLACE_FUNCTION_EZU(20320,soname,fnname) \
-         (void* sV, void* acceptV) \
+   char* VG_REPLACE_FUNCTION_EZU(20320,soname,fnname) \
+         (const char* sV, const char* acceptV); \
+   char* VG_REPLACE_FUNCTION_EZU(20320,soname,fnname) \
+         (const char* sV, const char* acceptV) \
    { \
-      UChar* s = (UChar*)sV; \
-      UChar* accept = (UChar*)acceptV; \
+      const HChar* s = sV; \
+      const HChar* accept = acceptV; \
       \
       /*  find the length of 'accept', not including terminating zero */ \
       UWord nacc = 0; \
@@ -1344,12 +1436,12 @@ static inline void my_exit ( int x )
       /* assert(nacc >= 1); */ \
       while (1) { \
          UWord i; \
-         UChar sc = *s; \
+         HChar sc = *s; \
          if (sc == 0) \
             break; \
          for (i = 0; i < nacc; i++) { \
             if (sc == accept[i]) \
-               return s; \
+              return (HChar *)s; \
          } \
          s++; \
       } \
@@ -1369,12 +1461,12 @@ static inline void my_exit ( int x )
 
 #define STRCSPN(soname, fnname) \
    SizeT VG_REPLACE_FUNCTION_EZU(20330,soname,fnname) \
-         (void* sV, void* rejectV); \
+         (const char* sV, const char* rejectV); \
    SizeT VG_REPLACE_FUNCTION_EZU(20330,soname,fnname) \
-         (void* sV, void* rejectV) \
+         (const char* sV, const char* rejectV) \
    { \
-      UChar* s = (UChar*)sV; \
-      UChar* reject = (UChar*)rejectV; \
+      const HChar* s = sV; \
+      const HChar* reject = rejectV; \
       \
       /* find the length of 'reject', not including terminating zero */ \
       UWord nrej = 0; \
@@ -1383,7 +1475,7 @@ static inline void my_exit ( int x )
       UWord len = 0; \
       while (1) { \
          UWord i; \
-         UChar sc = *s; \
+         HChar sc = *s; \
          if (sc == 0) \
             break; \
          for (i = 0; i < nrej; i++) { \
@@ -1412,12 +1504,12 @@ static inline void my_exit ( int x )
 
 #define STRSPN(soname, fnname) \
    SizeT VG_REPLACE_FUNCTION_EZU(20340,soname,fnname) \
-         (void* sV, void* acceptV); \
+         (const char* sV, const char* acceptV); \
    SizeT VG_REPLACE_FUNCTION_EZU(20340,soname,fnname) \
-         (void* sV, void* acceptV) \
+         (const char* sV, const char* acceptV) \
    { \
-      UChar* s = (UChar*)sV; \
-      UChar* accept = (UChar*)acceptV; \
+      const UChar* s = (const UChar *)sV;        \
+      const UChar* accept = (const UChar *)acceptV;     \
       \
       /* find the length of 'accept', not including terminating zero */ \
       UWord nacc = 0; \
@@ -1427,7 +1519,7 @@ static inline void my_exit ( int x )
       UWord len = 0; \
       while (1) { \
          UWord i; \
-         UChar sc = *s; \
+         HChar sc = *s; \
          if (sc == 0) \
             break; \
          for (i = 0; i < nacc; i++) { \
@@ -1455,21 +1547,21 @@ static inline void my_exit ( int x )
 /*---------------------- strcasestr ----------------------*/
 
 #define STRCASESTR(soname, fnname) \
-   void* VG_REPLACE_FUNCTION_EZU(20350,soname,fnname) \
-         (void* haystack, void* needle); \
-   void* VG_REPLACE_FUNCTION_EZU(20350,soname,fnname) \
-         (void* haystack, void* needle) \
+   char* VG_REPLACE_FUNCTION_EZU(20350,soname,fnname) \
+         (const char* haystack, const char* needle); \
+   char* VG_REPLACE_FUNCTION_EZU(20350,soname,fnname) \
+         (const char* haystack, const char* needle) \
    { \
       extern int tolower(int); \
-      UChar* h = (UChar*)haystack; \
-      UChar* n = (UChar*)needle; \
+      const HChar* h = haystack; \
+      const HChar* n = needle;   \
       \
       /* find the length of n, not including terminating zero */ \
       UWord nlen = 0; \
       while (n[nlen]) nlen++; \
       \
       /* if n is the empty string, match immediately. */ \
-      if (nlen == 0) return h; \
+      if (nlen == 0) return (HChar *)h;                  \
       \
       /* assert(nlen >= 1); */ \
       UChar n0 = tolower(n[0]);                 \
@@ -1486,14 +1578,14 @@ static inline void my_exit ( int x )
          } \
          /* assert(i >= 0 && i <= nlen); */ \
          if (i == nlen) \
-            return h; \
+           return (HChar *)h;                   \
          \
          h++; \
       } \
    }
 
 #if defined(VGO_linux)
-# if !defined(VGPV_arm_linux_android)
+# if !defined(VGPV_arm_linux_android) && !defined(VGPV_x86_linux_android)
   STRCASESTR(VG_Z_LIBC_SONAME,      strcasestr)
 # endif
 
@@ -1501,6 +1593,140 @@ static inline void my_exit ( int x )
 
 #endif
 
+
+/*---------------------- wcslen ----------------------*/
+
+// This is a wchar_t equivalent to strlen.  Unfortunately
+// we don't have wchar_t available here, but it looks like
+// a 32 bit int on Linux.  I don't know if that is also
+// valid on MacOSX.
+
+#define WCSLEN(soname, fnname) \
+   SizeT VG_REPLACE_FUNCTION_EZU(20370,soname,fnname) \
+      ( const UInt* str ); \
+   SizeT VG_REPLACE_FUNCTION_EZU(20370,soname,fnname) \
+      ( const UInt* str )  \
+   { \
+      SizeT i = 0; \
+      while (str[i] != 0) i++; \
+      return i; \
+   }
+
+#if defined(VGO_linux)
+ WCSLEN(VG_Z_LIBC_SONAME,          wcslen)
+
+#elif defined(VGO_darwin)
+
+#endif
+
+/*---------------------- wcscmp ----------------------*/
+
+// This is a wchar_t equivalent to strcmp.  We don't
+// have wchar_t available here, but in the GNU C Library
+// wchar_t is always 32 bits wide and wcscmp uses signed
+// comparison, not unsigned as in strcmp function.
+
+#define WCSCMP(soname, fnname) \
+   int VG_REPLACE_FUNCTION_EZU(20380,soname,fnname) \
+          ( const Int* s1, const Int* s2 ); \
+   int VG_REPLACE_FUNCTION_EZU(20380,soname,fnname) \
+          ( const Int* s1, const Int* s2 ) \
+   { \
+      register Int c1; \
+      register Int c2; \
+      while (True) { \
+         c1 = *s1; \
+         c2 = *s2; \
+         if (c1 != c2) break; \
+         if (c1 == 0) break; \
+         s1++; s2++; \
+      } \
+      if (c1 < c2) return -1; \
+      if (c1 > c2) return 1; \
+      return 0; \
+   }
+
+#if defined(VGO_linux)
+ WCSCMP(VG_Z_LIBC_SONAME,          wcscmp)
+#endif
+
+/*---------------------- wcscpy ----------------------*/
+
+// This is a wchar_t equivalent to strcpy.  We don't
+// have wchar_t available here, but in the GNU C Library
+// wchar_t is always 32 bits wide.
+
+#define WCSCPY(soname, fnname) \
+   Int* VG_REPLACE_FUNCTION_EZU(20390,soname,fnname) \
+      ( Int* dst, const Int* src ); \
+   Int* VG_REPLACE_FUNCTION_EZU(20390,soname,fnname) \
+      ( Int* dst, const Int* src ) \
+   { \
+      const Int* src_orig = src; \
+            Int* dst_orig = dst; \
+      \
+      while (*src) *dst++ = *src++; \
+      *dst = 0; \
+      \
+      /* This checks for overlap after copying, unavoidable without */ \
+      /* pre-counting length... should be ok */ \
+      if (is_overlap(dst_orig,  \
+                     src_orig,  \
+                     (Addr)dst-(Addr)dst_orig+1, \
+                     (Addr)src-(Addr)src_orig+1)) \
+         RECORD_OVERLAP_ERROR("wcscpy", dst_orig, src_orig, 0); \
+      \
+      return dst_orig; \
+   }
+
+#if defined(VGO_linux)
+ WCSCPY(VG_Z_LIBC_SONAME, wcscpy)
+#endif
+
+
+/*---------------------- wcschr ----------------------*/
+
+// This is a wchar_t equivalent to strchr.  We don't
+// have wchar_t available here, but in the GNU C Library
+// wchar_t is always 32 bits wide.
+
+#define WCSCHR(soname, fnname) \
+   Int* VG_REPLACE_FUNCTION_EZU(20400,soname,fnname) ( const Int* s, Int c ); \
+   Int* VG_REPLACE_FUNCTION_EZU(20400,soname,fnname) ( const Int* s, Int c ) \
+   { \
+      Int* p  = (Int*)s; \
+      while (True) { \
+         if (*p == c) return p; \
+         if (*p == 0) return NULL; \
+         p++; \
+      } \
+   }
+
+#if defined(VGO_linux)
+ WCSCHR(VG_Z_LIBC_SONAME,          wcschr)
+#endif
+/*---------------------- wcsrchr ----------------------*/
+
+// This is a wchar_t equivalent to strrchr.  We don't
+// have wchar_t available here, but in the GNU C Library
+// wchar_t is always 32 bits wide.
+
+#define WCSRCHR(soname, fnname) \
+   Int* VG_REPLACE_FUNCTION_EZU(20410,soname,fnname)( const Int* s, Int c ); \
+   Int* VG_REPLACE_FUNCTION_EZU(20410,soname,fnname)( const Int* s, Int c ) \
+   { \
+      Int* p    = (Int*) s; \
+      Int* last = NULL; \
+      while (True) { \
+         if (*p == c) last = p; \
+         if (*p == 0) return last; \
+         p++; \
+      } \
+   }
+
+#if defined(VGO_linux)
+ WCSRCHR(VG_Z_LIBC_SONAME, wcsrchr)
+#endif
 
 /*------------------------------------------------------------*/
 /*--- Improve definedness checking of process environment  ---*/
@@ -1519,7 +1745,7 @@ int VG_WRAP_FUNCTION_ZU(VG_Z_LIBC_SONAME, putenv) (char* string)
 {
     OrigFn fn;
     Word result;
-    const char* p = string;
+    const HChar* p = string;
     VALGRIND_GET_ORIG_FN(fn);
     /* Now by walking over the string we magically produce
        traces when hitting undefined memory. */
@@ -1538,7 +1764,7 @@ int VG_WRAP_FUNCTION_ZU(VG_Z_LIBC_SONAME, unsetenv) (const char* name)
 {
     OrigFn fn;
     Word result;
-    const char* p = name;
+    const HChar* p = name;
     VALGRIND_GET_ORIG_FN(fn);
     /* Now by walking over the string we magically produce
        traces when hitting undefined memory. */
@@ -1560,7 +1786,7 @@ int VG_WRAP_FUNCTION_ZU(VG_Z_LIBC_SONAME, setenv)
 {
     OrigFn fn;
     Word result;
-    const char* p;
+    const HChar* p;
     VALGRIND_GET_ORIG_FN(fn);
     /* Now by walking over the string we magically produce
        traces when hitting undefined memory. */
@@ -1570,7 +1796,7 @@ int VG_WRAP_FUNCTION_ZU(VG_Z_LIBC_SONAME, setenv)
     if (value)
         for (p = value; *p; p++)
             __asm__ __volatile__("" ::: "memory");
-    VALGRIND_CHECK_VALUE_IS_DEFINED (overwrite);
+    (void) VALGRIND_CHECK_VALUE_IS_DEFINED (overwrite);
     CALL_FN_W_WWW(result, fn, name, value, overwrite);
     return result;
 }

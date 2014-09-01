@@ -59,7 +59,7 @@ static char *to_gdb = NULL;
 static char *shared_mem = NULL;
 
 static
-int open_fifo (char *side, char *path, int flags)
+int open_fifo (const char *side, const char *path, int flags)
 {
   SysRes o;
   int fd;
@@ -91,7 +91,7 @@ void remote_utils_output_status(void)
 /* Returns 0 if vgdb and connection state looks good,
    otherwise returns an int value telling which check failed. */
 static
-int vgdb_state_looks_bad(char* where)
+int vgdb_state_looks_bad(const char* where)
 {
    if (VG_(kill)(shared->vgdb_pid, 0) != 0)
       return 1; // vgdb process does not exist anymore.
@@ -105,16 +105,11 @@ int vgdb_state_looks_bad(char* where)
    return 0; // all is ok.
 }
 
-/* On systems that defines PR_SET_PTRACER, verify if ptrace_scope is
-   is permissive enough for vgdb. Otherwise, call set_ptracer.
-   This is especially aimed at Ubuntu >= 10.10 which has added
-   the ptrace_scope context. */
-static
-void set_ptracer(void)
+void VG_(set_ptracer)(void)
 {
 #ifdef PR_SET_PTRACER
    SysRes o;
-   char *ptrace_scope_setting_file = "/proc/sys/kernel/yama/ptrace_scope";
+   const char *ptrace_scope_setting_file = "/proc/sys/kernel/yama/ptrace_scope";
    int fd;
    char ptrace_scope;
    int ret;
@@ -132,11 +127,16 @@ void set_ptracer(void)
       dlog(1, "ptrace_scope %c\n", ptrace_scope);
       if (ptrace_scope != '0') {
          /* insufficient default ptrace_scope.
-            Indicate to the kernel that we accept to be
-            ptraced by our vgdb. */
-         ret = VG_(prctl) (PR_SET_PTRACER, shared->vgdb_pid, 0, 0, 0);
-         dlog(1, "set_ptracer to vgdb_pid %d result %d\n",
-              shared->vgdb_pid, ret);
+            Indicate to the kernel that we accept to be ptraced. */
+#ifdef PR_SET_PTRACER_ANY
+         ret = VG_(prctl) (PR_SET_PTRACER, PR_SET_PTRACER_ANY, 0, 0, 0);
+         dlog(1, "set_ptracer to PR_SET_PTRACER_ANY result %d\n", ret);
+#else
+         ret = VG_(prctl) (PR_SET_PTRACER, 1, 0, 0, 0);
+         dlog(1, "set_ptracer to 1 result %d\n", ret);
+#endif
+         if (ret)
+            VG_(umsg)("error calling PR_SET_PTRACER, vgdb might block\n");
       }
    } else {
       dlog(0, "Could not read the ptrace_scope setting from %s\n",
@@ -181,7 +181,6 @@ int ensure_write_remote_desc(void)
          be reasonably sure someone is reading on the other
          side of the fifo. */
       if (!vgdb_state_looks_bad("bad?@ensure_write_remote_desc")) {
-         set_ptracer();
          write_remote_desc = open_fifo ("write", to_gdb, VKI_O_WRONLY);
       }
    }
@@ -196,7 +195,7 @@ static
 void safe_mknod (char *nod)
 {
    SysRes m;
-   m = VG_(mknod) (nod, VKI_S_IFIFO|0666, 0);
+   m = VG_(mknod) (nod, VKI_S_IFIFO|0600, 0);
    if (sr_isError (m)) {
       if (sr_Err (m) == VKI_EEXIST) {
          if (VG_(clo_verbosity) > 1) {
@@ -219,15 +218,16 @@ void safe_mknod (char *nod)
    will be created if not existing yet. They will be removed when
    the gdbserver connection is closed or the process exits */
 
-void remote_open (char *name)
+void remote_open (const HChar *name)
 {
    const HChar *user, *host;
    int save_fcntl_flags, len;
    VgdbShared vgdbinit = 
-      {0, 0, 0, (Addr) VG_(invoke_gdbserver),
+      {0, 0, (Addr) VG_(invoke_gdbserver),
        (Addr) VG_(threads), sizeof(ThreadState), 
        offsetof(ThreadState, status),
-       offsetof(ThreadState, os_state) + offsetof(ThreadOSstate, lwpid)};
+       offsetof(ThreadState, os_state) + offsetof(ThreadOSstate, lwpid),
+       0};
    const int pid = VG_(getpid)();
    const int name_default = strcmp(name, VG_(vgdb_prefix_default)()) == 0;
    Addr addr_shared;
@@ -269,7 +269,7 @@ void remote_open (char *name)
                 "don't want to do, unless you know exactly what you're doing,\n"
                 "or are doing some strange experiment):\n"
                 "  %s/../../bin/vgdb --pid=%d%s%s ...command...\n",
-                VG_LIBDIR,
+                VG_(libdir),
                 pid, (name_default ? "" : " --vgdb-prefix="),
                 (name_default ? "" : name));
    }
@@ -282,7 +282,7 @@ void remote_open (char *name)
          "and then give GDB the following command\n"
          "  target remote | %s/../../bin/vgdb --pid=%d%s%s\n",
          VG_(args_the_exename),
-         VG_LIBDIR,
+         VG_(libdir),
          pid, (name_default ? "" : " --vgdb-prefix="), 
          (name_default ? "" : name)
       );
@@ -292,7 +292,7 @@ void remote_open (char *name)
 
    if (!mknod_done) {
       mknod_done++;
-
+      VG_(set_ptracer)();
       /*
        * Unlink just in case a previous process with the same PID had been
        * killed and hence Valgrind hasn't had the chance yet to remove these.
@@ -306,7 +306,7 @@ void remote_open (char *name)
 
       pid_from_to_creator = pid;
       
-      o = VG_(open) (shared_mem, VKI_O_CREAT|VKI_O_RDWR, 0666);
+      o = VG_(open) (shared_mem, VKI_O_CREAT|VKI_O_RDWR, 0600);
       if (sr_isError (o)) {
          sr_perror(o, "cannot create shared_mem file %s\n", shared_mem);
          fatal("");
@@ -361,7 +361,7 @@ void sync_gdb_connection(void)
 }
 
 static
-char * ppFinishReason (FinishReason reason)
+const char * ppFinishReason (FinishReason reason)
 {
    switch (reason) {
    case orderly_finish:    return "orderly_finish";
@@ -437,7 +437,7 @@ void error_poll_cond(void)
    gives a small value to --vgdb-poll. So, the function avoids
    doing repetitively system calls by rather looking at the
    counter values maintained in shared memory by vgdb. */
-int remote_desc_activity(char *msg)
+int remote_desc_activity(const char *msg)
 {
    int ret;
    const int looking_at = shared->written_by_vgdb;
@@ -540,6 +540,29 @@ int hexify (char *hex, const char *bin, int count)
   *hex = 0;
   return i;
 }
+
+/* builds an image of bin according to byte order of the architecture 
+   Useful for register and int image */
+char* heximage (char *buf, char *bin, int count)
+{
+#if defined(VGA_x86) || defined(VGA_amd64)
+   char rev[count]; 
+   /* note: no need for trailing \0, length is known with count */
+  int i;
+  for (i = 0; i < count; i++)
+    rev[i] = bin[count - i - 1];
+  hexify (buf, rev, count);
+#else
+  hexify (buf, bin, count);
+#endif
+  return buf;
+}
+
+void* C2v(CORE_ADDR addr)
+{
+   return (void*) addr;
+}
+
 
 /* Convert BUFFER, binary data at least LEN bytes long, into escaped
    binary data in OUT_BUF.  Set *OUT_LEN to the length of the data
@@ -672,7 +695,10 @@ int putpkt_binary (char *buf, int cnt)
    char *p;
    int cc;
 
-   buf2 = malloc (PBUFSIZ);
+   buf2 = malloc (PBUFSIZ+POVERHSIZ);
+   // should malloc PBUFSIZ, but bypass GDB bug (see gdbserver_init in server.c)
+   vg_assert (5 == POVERHSIZ);
+   vg_assert (cnt <= PBUFSIZ); // be tolerant for GDB bug.
 
    /* Copy the packet into buffer BUF2, encapsulating it
       and giving it a checksum.  */
@@ -728,7 +754,7 @@ int putpkt_binary (char *buf, int cnt)
 
       /* Check for an input interrupt while we're here.  */
       if (cc == '\003')
-         (*the_target->send_signal) (VKI_SIGINT);
+         dlog(1, "Received 0x03 character (SIGINT)\n");
    }
    while (cc != '+');
 
@@ -747,19 +773,23 @@ int putpkt (char *buf)
 
 void monitor_output (char *s)
 {
-   const int len = strlen(s);
-   char *buf = malloc(1 + 2*len + 1);
-
-   buf[0] = 'O';
-   hexify(buf+1, s, len);
-   if (putpkt (buf) < 0) {
-      /* We probably have lost the connection with vgdb. */
-      reset_valgrind_sink("Error writing monitor output");
-      /* write again after reset */
-      VG_(printf) ("%s", s);
+   if (remote_connected()) {
+      const int len = strlen(s);
+      char *buf = malloc(1 + 2*len + 1);
+      
+      buf[0] = 'O';
+      hexify(buf+1, s, len);
+      if (putpkt (buf) < 0) {
+         /* We probably have lost the connection with vgdb. */
+         reset_valgrind_sink("Error writing monitor output");
+         /* write again after reset */
+         VG_(printf) ("%s", s);
+      }
+      
+      free (buf);
+   } else {
+      print_to_initial_valgrind_sink (s);
    }
-   
-   free (buf);
 }
 
 /* Returns next char from remote GDB.  -1 if error.  */
@@ -905,7 +935,7 @@ void write_enn (char *buf)
    buf[3] = '\0';
 }
 
-void convert_int_to_ascii (unsigned char *from, char *to, int n)
+void convert_int_to_ascii (const unsigned char *from, char *to, int n)
 {
    int nib;
    int ch;
@@ -920,7 +950,7 @@ void convert_int_to_ascii (unsigned char *from, char *to, int n)
 }
 
 
-void convert_ascii_to_int (char *from, unsigned char *to, int n)
+void convert_ascii_to_int (const char *from, unsigned char *to, int n)
 {
    int nib1, nib2;
    while (n--) {
@@ -961,15 +991,14 @@ void prepare_resume_reply (char *buf, char status, unsigned char sig)
    if (status == 'T') {
       const char **regp = gdbserver_expedite_regs;
       
-      if (the_target->stopped_by_watchpoint != NULL
-	  && (*the_target->stopped_by_watchpoint) ()) {
+      if (valgrind_stopped_by_watchpoint()) {
          CORE_ADDR addr;
          int i;
 
          strncpy (buf, "watch:", 6);
          buf += 6;
 
-         addr = (*the_target->stopped_data_address) ();
+         addr = valgrind_stopped_data_address ();
 
          /* Convert each byte of the address into two hexadecimal chars.
             Note that we take sizeof (void *) instead of sizeof (addr);
@@ -1079,13 +1108,13 @@ int decode_X_packet (char *from, int packet_len, CORE_ADDR *mem_addr_ptr,
 HChar *
 VG_(vgdb_prefix_default)(void)
 {
-   const HChar *tmpdir;
-   HChar *prefix;
+   static HChar *prefix;
    
-   tmpdir = VG_(tmpdir)();
-   prefix = malloc(strlen(tmpdir) + strlen("/vgdb-pipe") + 1);
-   strcpy(prefix, tmpdir);
-   strcat(prefix, "/vgdb-pipe");
-
+   if (prefix == NULL) {
+     const HChar *tmpdir = VG_(tmpdir)();
+     prefix = malloc(strlen(tmpdir) + strlen("/vgdb-pipe") + 1);
+     strcpy(prefix, tmpdir);
+     strcat(prefix, "/vgdb-pipe");
+   }
    return prefix;
 }

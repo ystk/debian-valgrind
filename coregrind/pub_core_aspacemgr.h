@@ -7,7 +7,7 @@
    This file is part of Valgrind, a dynamic binary instrumentation
    framework.
 
-   Copyright (C) 2000-2011 Julian Seward
+   Copyright (C) 2000-2013 Julian Seward
       jseward@acm.org
 
    This program is free software; you can redistribute it and/or
@@ -73,7 +73,8 @@ extern Addr VG_(am_startup) ( Addr sp_at_startup );
 
 /* Find the next segment along from 'here', if it is a file/anon/resvn
    segment. */
-extern NSegment const* VG_(am_next_nsegment) ( NSegment* here, Bool fwds );
+extern NSegment const* VG_(am_next_nsegment) ( const NSegment* here,
+                                               Bool fwds );
 
 /* Is the area [start .. start+len-1] validly accessible by the 
    client with at least the permissions 'prot' ?  To find out
@@ -98,7 +99,7 @@ extern Bool VG_(am_is_valid_for_client_or_free_or_resvn)
 extern ULong VG_(am_get_anonsize_total)( void );
 
 /* Show the segment array on the debug log, at given loglevel. */
-extern void VG_(am_show_nsegments) ( Int logLevel, HChar* who );
+extern void VG_(am_show_nsegments) ( Int logLevel, const HChar* who );
 
 /* Get the filename corresponding to this segment, if known and if it
    has one.  The returned name's storage cannot be assumed to be
@@ -150,6 +151,17 @@ extern Addr VG_(am_get_advisory)
    about return values apply. */
 extern Addr VG_(am_get_advisory_client_simple) 
    ( Addr start, SizeT len, /*OUT*/Bool* ok );
+
+/* Returns True if [start, start + len - 1] is covered by a single
+   free segment, otherwise returns False.
+   This allows to check the following case:
+   VG_(am_get_advisory_client_simple) (first arg == 0, meaning
+   this-or-nothing) is too lenient, and may allow us to trash
+   the next segment along.  So make very sure that the proposed
+   new area really is free.  This is perhaps overly
+   conservative, but it fixes #129866. */
+extern Bool VG_(am_covered_by_single_free_segment)
+   ( Addr start, SizeT len);
 
 /* Notifies aspacem that the client completed an mmap successfully.
    The segment array is updated accordingly.  If the returned Bool is
@@ -270,12 +282,12 @@ extern Bool VG_(am_change_ownership_v_to_c)( Addr start, SizeT len );
    (is-client-heap) flag for that area.  Otherwise do nothing.
    (Bizarre interface so that the same code works for both Linux and
    AIX and does not impose inefficiencies on the Linux version.) */
-extern void VG_(am_set_segment_isCH_if_SkAnonC)( NSegment* seg );
+extern void VG_(am_set_segment_isCH_if_SkAnonC)( const NSegment* seg );
 
 /* Same idea as VG_(am_set_segment_isCH_if_SkAnonC), except set the
    segment's hasT bit (has-cached-code) if this is SkFileC or SkAnonC
    segment. */
-extern void VG_(am_set_segment_hasT_if_SkFileC_or_SkAnonC)( NSegment* );
+extern void VG_(am_set_segment_hasT_if_SkFileC_or_SkAnonC)( const NSegment* );
 
 /* --- --- --- reservations --- --- --- */
 
@@ -301,7 +313,7 @@ extern Bool VG_(am_create_reservation)
    the reservation segment after the operation must be at least one
    page long. */
 extern Bool VG_(am_extend_into_adjacent_reservation_client) 
-   ( NSegment* seg, SSizeT delta );
+   ( const NSegment* seg, SSizeT delta );
 
 /* --- --- --- resizing/move a mapping --- --- --- */
 
@@ -313,7 +325,7 @@ extern Bool VG_(am_extend_into_adjacent_reservation_client)
    *need_discard is True after a successful return, the caller should
    immediately discard translations from the new area. */
 extern Bool VG_(am_extend_map_client)( /*OUT*/Bool* need_discard,
-                                       NSegment* seg, SizeT delta );
+                                       const NSegment* seg, SizeT delta );
 
 /* Remap the old address range to the new address range.  Fails if any
    parameter is not page aligned, if the either size is zero, if any
@@ -332,7 +344,8 @@ extern Bool VG_(am_relocate_nooverlap_client)( /*OUT*/Bool* need_discard,
 // stacks.  The address space manager provides and suitably
 // protects such stacks.
 
-#if defined(VGP_ppc32_linux) || defined(VGP_ppc64_linux)
+#if defined(VGP_ppc32_linux) || defined(VGP_ppc64_linux) \
+    || defined(VGP_mips32_linux) || defined(VGP_mips64_linux)
 # define VG_STACK_GUARD_SZB  65536  // 1 or 16 pages
 # define VG_STACK_ACTIVE_SZB (4096 * 256) // 1Mb
 #else

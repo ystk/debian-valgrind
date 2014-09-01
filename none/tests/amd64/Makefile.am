@@ -13,7 +13,7 @@ if BUILD_SSSE3_TESTS
  INSN_TESTS += insn_ssse3
 endif
 if BUILD_PCLMULQDQ_TESTS
-INSN_TESTS += insn_pclmulqdq
+ INSN_TESTS += insn_pclmulqdq
 endif
 
 # Explicitly include insn_sse3 even if ! BUILD_SSE3_TESTS, 
@@ -21,8 +21,13 @@ endif
 # which failed the BUILD_SSE3_TESTS test in configure.in.
 
 EXTRA_DIST = \
+	aes.vgtest aes.stdout.exp aes.stderr.exp \
 	amd64locked.vgtest amd64locked.stdout.exp amd64locked.stderr.exp \
+	avx-1.vgtest avx-1.stdout.exp avx-1.stderr.exp \
+	avx2-1.vgtest avx2-1.stdout.exp avx2-1.stderr.exp \
 	asorep.stderr.exp asorep.stdout.exp asorep.vgtest \
+	bmi.stderr.exp bmi.stdout.exp bmi.vgtest \
+	fma.stderr.exp fma.stdout.exp fma.vgtest \
 	bug127521-64.vgtest bug127521-64.stdout.exp bug127521-64.stderr.exp \
 	bug132813-amd64.vgtest bug132813-amd64.stdout.exp \
 	bug132813-amd64.stderr.exp \
@@ -50,12 +55,18 @@ EXTRA_DIST = \
 	looper.stderr.exp looper.stdout.exp looper.vgtest \
 	loopnel.stderr.exp loopnel.stdout.exp loopnel.vgtest \
 	lzcnt64.stderr.exp lzcnt64.stdout.exp lzcnt64.vgtest \
+	movbe.stderr.exp movbe.stdout.exp movbe.vgtest \
+	nan80and64.stderr.exp nan80and64.stdout.exp nan80and64.vgtest \
 	nibz_bennee_mmap.stderr.exp nibz_bennee_mmap.stdout.exp \
 	nibz_bennee_mmap.vgtest \
 	pcmpstr64.stderr.exp pcmpstr64.stdout.exp \
 	pcmpstr64.vgtest \
+	pcmpstr64w.stderr.exp pcmpstr64w.stdout.exp \
+	pcmpstr64w.vgtest \
 	pcmpxstrx64.stderr.exp pcmpxstrx64.stdout.exp \
 	pcmpxstrx64.vgtest \
+	pcmpxstrx64w.stderr.exp pcmpxstrx64w.stdout.exp \
+	pcmpxstrx64w.vgtest \
 	rcl-amd64.vgtest rcl-amd64.stdout.exp rcl-amd64.stderr.exp \
 	redundantRexW.vgtest redundantRexW.stdout.exp \
 	redundantRexW.stderr.exp \
@@ -68,21 +79,27 @@ EXTRA_DIST = \
 	sse4-64.stdout.exp-older-glibc \
 	slahf-amd64.stderr.exp slahf-amd64.stdout.exp \
 	slahf-amd64.vgtest \
+	tm1.vgtest tm1.stderr.exp tm1.stdout.exp \
+	xacq_xrel.stderr.exp xacq_xrel.stdout.exp xacq_xrel.vgtest \
 	xadd.stderr.exp xadd.stdout.exp xadd.vgtest
 
 check_PROGRAMS = \
+	allexec \
 	amd64locked \
-	asorep \
 	bug127521-64 bug132813-amd64 bug132918 \
 	clc \
 	cmpxchg \
 	$(INSN_TESTS) \
+	nan80and64 \
 	rcl-amd64 \
 	redundantRexW \
 	smc1 \
 	sbbmisc \
 	nibz_bennee_mmap \
 	xadd
+if BUILD_ADDR32_TESTS
+ check_PROGRAMS += asorep
+endif
 if BUILD_SSSE3_TESTS
  check_PROGRAMS += ssse3_misaligned
 endif
@@ -90,7 +107,29 @@ if BUILD_LZCNT_TESTS
  check_PROGRAMS += lzcnt64
 endif
 if BUILD_SSE42_TESTS
- check_PROGRAMS += pcmpstr64 pcmpxstrx64 sse4-64 crc32
+ check_PROGRAMS += \
+	pcmpstr64 pcmpxstrx64 sse4-64 crc32 aes \
+	pcmpstr64w pcmpxstrx64w
+endif
+if BUILD_AVX_TESTS
+if BUILD_VPCLMULQDQ_TESTS
+ check_PROGRAMS += avx-1
+endif
+endif
+if BUILD_AVX2_TESTS
+  check_PROGRAMS += avx2-1
+endif
+if BUILD_TSX_TESTS
+  check_PROGRAMS += tm1 xacq_xrel
+endif
+if BUILD_BMI_TESTS
+ check_PROGRAMS += bmi
+endif
+if BUILD_FMA_TESTS
+ check_PROGRAMS += fma
+endif
+if BUILD_MOVBE_TESTS
+ check_PROGRAMS += movbe
 endif
 
 # DDD: these need to be made to work on Darwin like the x86/ ones were.
@@ -102,15 +141,19 @@ if ! VGCONF_OS_IS_DARWIN
 	fcmovnu \
 	fxtract \
 	looper \
-	loopnel \
 	jrcxz \
 	shrld \
 	slahf-amd64
+if BUILD_LOOPNEL_TESTS
+   check_PROGRAMS += loopnel
+endif
 endif
 
 AM_CFLAGS    += @FLAG_M64@
 AM_CXXFLAGS  += @FLAG_M64@
 AM_CCASFLAGS += @FLAG_M64@
+
+allexec_CFLAGS		= $(AM_CFLAGS) @FLAG_W_NO_NONNULL@
 
 # generic C ones
 amd64locked_CFLAGS	= $(AM_CFLAGS) -O

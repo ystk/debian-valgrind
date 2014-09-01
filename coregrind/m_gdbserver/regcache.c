@@ -54,7 +54,7 @@ struct inferior_regcache_data * get_regcache (struct thread_info *inf,
 
    /* FIXME - fetch registers for INF */
    if (fetch && regcache->registers_valid == 0) {
-      fetch_inferior_registers (0);
+      valgrind_fetch_registers (0);
       regcache->registers_valid = 1;
    }
 
@@ -72,7 +72,7 @@ void regcache_invalidate_one (struct inferior_list_entry *entry)
       struct thread_info *saved_inferior = current_inferior;
 
       current_inferior = thread;
-      store_inferior_registers (-1);
+      valgrind_store_registers (-1);
       current_inferior = saved_inferior;
    }
 
@@ -164,7 +164,7 @@ void registers_to_string (char *buf)
    convert_int_to_ascii (registers, buf, register_bytes);
 }
 
-void registers_from_string (char *buf)
+void registers_from_string (const char *buf)
 {
    int len = strlen (buf);
    unsigned char *registers = get_regcache (current_inferior, 1)->registers;
@@ -235,7 +235,7 @@ void supply_register_from_string (int n, const char *buf, Bool *mod)
 {
    Bool new;
    unsigned char bytes_register[register_size (n)];
-   convert_ascii_to_int ((char *) buf, bytes_register, register_size (n));
+   convert_ascii_to_int (buf, bytes_register, register_size (n));
    VG_(dmemcpy) (register_data_for_supply (n, 0, &new), 
                  bytes_register, register_size (n), mod);
    if (new)

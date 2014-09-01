@@ -7,7 +7,7 @@
    This file is part of Valgrind, a dynamic binary instrumentation
    framework.
 
-   Copyright (C) 2000-2011 Julian Seward 
+   Copyright (C) 2000-2013 Julian Seward 
       jseward@acm.org
 
    This program is free software; you can redistribute it and/or
@@ -236,12 +236,14 @@ struct vki_sigcontext {
 #define VKI_MAP_PRIVATE	0x02		/* Changes are private */
 #define VKI_MAP_FIXED	0x10		/* Interpret addr exactly */
 #define VKI_MAP_ANONYMOUS	0x20	/* don't use a file */
+#define VKI_MAP_32BIT	0x40		/* only give out 32bit addresses */
 #define VKI_MAP_NORESERVE       0x4000  /* don't check for reservations */
 
 //----------------------------------------------------------------------
 // From linux-2.6.9/include/asm-x86_64/fcntl.h
 //----------------------------------------------------------------------
 
+#define VKI_O_ACCMODE	     03
 #define VKI_O_RDONLY	     00
 #define VKI_O_WRONLY	     01
 #define VKI_O_RDWR	     02
@@ -268,6 +270,18 @@ struct vki_sigcontext {
 #define VKI_F_SETSIG		10	/*  for sockets. */
 #define VKI_F_GETSIG		11	/*  for sockets. */
 
+#define VKI_F_SETOWN_EX		15
+#define VKI_F_GETOWN_EX		16
+
+#define VKI_F_OWNER_TID		0
+#define VKI_F_OWNER_PID		1
+#define VKI_F_OWNER_PGRP	2
+
+struct vki_f_owner_ex {
+	int	type;
+	__vki_kernel_pid_t	pid;
+};
+
 #define VKI_FD_CLOEXEC	1	/* actually anything with low bit set goes */
 
 #define VKI_F_LINUX_SPECIFIC_BASE	1024
@@ -288,6 +302,8 @@ struct vki_sigcontext {
 #define VKI_SOL_SOCKET	1
 
 #define VKI_SO_TYPE	3
+
+#define VKI_SO_ATTACH_FILTER	26
 
 //----------------------------------------------------------------------
 // From linux-2.6.9/include/asm-x86_64/sockios.h
@@ -449,6 +465,8 @@ struct vki_termios {
 #define VKI_TIOCGPTN	_VKI_IOR('T',0x30, unsigned int) /* Get Pty Number (of pty-mux device) */
 #define VKI_TIOCSPTLCK	_VKI_IOW('T',0x31, int)  /* Lock/unlock Pty */
 
+#define VKI_FIONCLEX    0x5450
+#define VKI_FIOCLEX     0x5451
 #define VKI_FIOASYNC	0x5452
 #define VKI_TIOCSERGETLSR   0x5459 /* Get line status register */
 
@@ -546,11 +564,13 @@ struct vki_ucontext {
 // type for x86 (the final 'lm' field is added);  I'm not sure about the
 // significance of that... --njn
 
-#if 0
 /* [[Nb: This is the structure passed to the modify_ldt syscall.  Just so as
    to confuse and annoy everyone, this is _not_ the same as an
    VgLdtEntry and has to be translated into such.  The logic for doing
    so, in vg_ldt.c, is copied from the kernel sources.]] */
+/* Note also that a comment in ldt.h indicates that the below
+   contains several fields ignored on 64bit, and that modify_ldt
+   is rather for 32bit. */
 struct vki_user_desc {
 	unsigned int  entry_number;
 	unsigned long base_addr;
@@ -566,9 +586,6 @@ struct vki_user_desc {
 
 // [[Nb: for our convenience within Valgrind, use a more specific name]]
 typedef struct vki_user_desc vki_modify_ldt_t;
-#endif
-
-typedef void vki_modify_ldt_t;
 
 //----------------------------------------------------------------------
 // From linux-2.6.11.2/include/asm-x86_64/ipcbuf.h

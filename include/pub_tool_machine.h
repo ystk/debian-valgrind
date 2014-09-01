@@ -7,7 +7,7 @@
    This file is part of Valgrind, a dynamic binary instrumentation
    framework.
 
-   Copyright (C) 2000-2011 Julian Seward
+   Copyright (C) 2000-2013 Julian Seward
       jseward@acm.org
 
    This program is free software; you can redistribute it and/or
@@ -30,6 +30,9 @@
 
 #ifndef __PUB_TOOL_MACHINE_H
 #define __PUB_TOOL_MACHINE_H
+
+#include "pub_tool_basics.h"           // ThreadID
+#include "libvex.h"                    // VexArchInfo
 
 #if defined(VGP_x86_linux)
 #  define VG_MIN_INSTR_SZB          1  // min length of native instruction
@@ -83,6 +86,18 @@
 #  define VG_CLREQ_SZB             19
 #  define VG_STACK_REDZONE_SZB    128
 
+#elif defined(VGP_mips32_linux)
+#  define VG_MIN_INSTR_SZB          4
+#  define VG_MAX_INSTR_SZB          4 
+#  define VG_CLREQ_SZB             20
+#  define VG_STACK_REDZONE_SZB      0
+
+#elif defined(VGP_mips64_linux)
+#  define VG_MIN_INSTR_SZB          4
+#  define VG_MAX_INSTR_SZB          4 
+#  define VG_CLREQ_SZB             20
+#  define VG_STACK_REDZONE_SZB      0
+
 #else
 #  error Unknown platform
 #endif
@@ -118,10 +133,12 @@ void VG_(set_syscall_return_shadows) ( ThreadId tid,
                                        UWord s1err, UWord s2err );
 
 // Apply a function 'f' to all the general purpose registers in all the
-// current threads.
+// current threads. This is all live threads, or (when the process is exiting)
+// all threads that were instructed to die by the thread calling exit.
 // This is very Memcheck-specific -- it's used to find the roots when
 // doing leak checking.
-extern void VG_(apply_to_GP_regs)(void (*f)(UWord val));
+extern void VG_(apply_to_GP_regs)(void (*f)(ThreadId tid,
+                                            const HChar* regname, UWord val));
 
 // This iterator lets you inspect each live thread's stack bounds.
 // Returns False at the end.  'tid' is the iterator and you can only
@@ -150,6 +167,16 @@ extern SizeT VG_(thread_get_altstack_size) ( ThreadId tid );
 // most platforms it's the identity function.  Unfortunately, on
 // ppc64-linux it isn't (sigh).
 extern void* VG_(fnptr_to_fnentry)( void* );
+
+/* Returns the size of the largest guest register that we will
+   simulate in this run.  This depends on both the guest architecture
+   and on the specific capabilities we are simulating for that guest
+   (eg, AVX or non-AVX ?, for amd64). */
+extern Int VG_(machine_get_size_of_largest_guest_register) ( void );
+
+/* Return host cpu info. */
+extern void VG_(machine_get_VexArchInfo)( /*OUT*/VexArch*,
+                                          /*OUT*/VexArchInfo* );
 
 #endif   // __PUB_TOOL_MACHINE_H
 

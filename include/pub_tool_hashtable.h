@@ -7,7 +7,7 @@
    This file is part of Valgrind, a dynamic binary instrumentation
    framework.
 
-   Copyright (C) 2005-2011 Nicholas Nethercote
+   Copyright (C) 2005-2013 Nicholas Nethercote
       njn@valgrind.org
 
    This program is free software; you can redistribute it and/or
@@ -31,6 +31,8 @@
 #ifndef __PUB_TOOL_HASHTABLE_H
 #define __PUB_TOOL_HASHTABLE_H
 
+#include "pub_tool_basics.h"   // VG_ macro
+
 /* Generic type for a separately-chained hash table.  Via a kind of dodgy
    C-as-C++ style inheritance, tools can extend the VgHashNode type, so long
    as the first two fields match the sizes of these two fields.  Requires
@@ -53,7 +55,7 @@ typedef struct _VgHashTable * VgHashTable;
    be freed with VG_(free)().  The table starts small but will
    periodically be expanded.  This is transparent to the users of this
    module. */
-extern VgHashTable VG_(HT_construct) ( HChar* name );
+extern VgHashTable VG_(HT_construct) ( const HChar* name );
 
 /* Count the number of nodes in a table. */
 extern Int VG_(HT_count_nodes) ( VgHashTable table );
@@ -90,8 +92,9 @@ extern void VG_(HT_ResetIter) ( VgHashTable table );
    assurance. */
 extern void* VG_(HT_Next) ( VgHashTable table );
 
-/* Destroy a table. */
-extern void VG_(HT_destruct) ( VgHashTable t );
+/* Destroy a table and deallocates the memory used by the nodes using
+   freenode_fn.*/
+extern void VG_(HT_destruct) ( VgHashTable t, void(*freenode_fn)(void*) );
 
 
 #endif   // __PUB_TOOL_HASHTABLE_H

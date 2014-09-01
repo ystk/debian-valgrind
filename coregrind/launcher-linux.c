@@ -7,7 +7,7 @@
    This file is part of Valgrind, a dynamic binary instrumentation
    framework.
 
-   Copyright (C) 2000-2011 Julian Seward 
+   Copyright (C) 2000-2013 Julian Seward 
       jseward@acm.org
 
    This program is free software; you can redistribute it and/or
@@ -51,11 +51,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-
-
-
-#define PATH_MAX 4096 /* POSIX refers to this a lot but I dunno
-                         where it is defined */
+#include <limits.h>             // PATH_MAX
 
 #ifndef EM_X86_64
 #define EM_X86_64 62    // elf.h doesn't define this on some older systems
@@ -81,9 +77,20 @@ static void barf ( const char *format, ... )
 /* Search the path for the client program */
 static const char *find_client(const char *clientname)
 {
-   static char fullname[PATH_MAX];
+   char *fullname;
    const char *path = getenv("PATH");
    const char *colon;
+
+   assert(clientname != NULL);
+
+   if (path == NULL) return clientname;
+
+   /* Make the size of the FULLNAME buffer large enough. */
+   unsigned need = strlen(path) + strlen("/") + strlen(clientname) + 1;
+
+   fullname = malloc(need);
+   if (fullname == NULL)
+      barf("malloc of fullname failed.");
 
    while (path)
    {
@@ -94,7 +101,7 @@ static const char *find_client(const char *clientname)
       }
       else
       {
-         memcpy(fullname, path, colon - path);
+         strncpy(fullname, path, colon - path);
          fullname[colon - path] = '\0';
          path = colon + 1;
       }
@@ -105,6 +112,7 @@ static const char *find_client(const char *clientname)
       if (access(fullname, R_OK|X_OK) == 0)
          return fullname;
    }
+   free(fullname);
 
    return clientname;
 }
@@ -113,7 +121,7 @@ static const char *find_client(const char *clientname)
 static const char *select_platform(const char *clientname)
 {
    int fd;
-   uint8_t header[4096];
+   char header[4096];
    ssize_t n_bytes;
    const char *platform = NULL;
 
@@ -179,12 +187,24 @@ static const char *select_platform(const char *clientname)
                  ehdr->e_ident[EI_OSABI] == ELFOSABI_LINUX)) {
                platform = "arm-linux";
             }
+            else
+            if (ehdr->e_machine == EM_MIPS &&
+                (ehdr->e_ident[EI_OSABI] == ELFOSABI_SYSV ||
+                 ehdr->e_ident[EI_OSABI] == ELFOSABI_LINUX)) {
+               platform = "mips32-linux";
+            }
          }
          else if (header[EI_DATA] == ELFDATA2MSB) {
             if (ehdr->e_machine == EM_PPC &&
                 (ehdr->e_ident[EI_OSABI] == ELFOSABI_SYSV ||
                  ehdr->e_ident[EI_OSABI] == ELFOSABI_LINUX)) {
                platform = "ppc32-linux";
+            }
+            else 
+            if (ehdr->e_machine == EM_MIPS &&
+                (ehdr->e_ident[EI_OSABI] == ELFOSABI_SYSV ||
+                 ehdr->e_ident[EI_OSABI] == ELFOSABI_LINUX)) {
+               platform = "mips32-linux";
             }
          }
 
@@ -196,9 +216,13 @@ static const char *select_platform(const char *clientname)
                 (ehdr->e_ident[EI_OSABI] == ELFOSABI_SYSV ||
                  ehdr->e_ident[EI_OSABI] == ELFOSABI_LINUX)) {
                platform = "amd64-linux";
+            } else if (ehdr->e_machine == EM_MIPS &&
+                (ehdr->e_ident[EI_OSABI] == ELFOSABI_SYSV ||
+                 ehdr->e_ident[EI_OSABI] == ELFOSABI_LINUX)) {
+               platform = "mips64-linux";
             }
          } else if (header[EI_DATA] == ELFDATA2MSB) {
-#           if !defined(VGPV_arm_linux_android)
+#           if !defined(VGPV_arm_linux_android) && !defined(VGPV_x86_linux_android)
             if (ehdr->e_machine == EM_PPC64 &&
                 (ehdr->e_ident[EI_OSABI] == ELFOSABI_SYSV ||
                  ehdr->e_ident[EI_OSABI] == ELFOSABI_LINUX)) {
@@ -209,6 +233,10 @@ static const char *select_platform(const char *clientname)
                 (ehdr->e_ident[EI_OSABI] == ELFOSABI_SYSV ||
                  ehdr->e_ident[EI_OSABI] == ELFOSABI_LINUX)) {
                platform = "s390x-linux";
+            } else if (ehdr->e_machine == EM_MIPS &&
+                (ehdr->e_ident[EI_OSABI] == ELFOSABI_SYSV ||
+                 ehdr->e_ident[EI_OSABI] == ELFOSABI_LINUX)) {
+               platform = "mips64-linux";
             }
 #           endif
          }
@@ -284,7 +312,9 @@ int main(int argc, char** argv, char** envp)
        (0==strcmp(VG_PLATFORM,"ppc32-linux")) ||
        (0==strcmp(VG_PLATFORM,"ppc64-linux")) ||
        (0==strcmp(VG_PLATFORM,"arm-linux"))   ||
-       (0==strcmp(VG_PLATFORM,"s390x-linux")))
+       (0==strcmp(VG_PLATFORM,"s390x-linux")) ||
+       (0==strcmp(VG_PLATFORM,"mips32-linux")) ||
+       (0==strcmp(VG_PLATFORM,"mips64-linux")))
       default_platform = VG_PLATFORM;
    else
       barf("Unknown VG_PLATFORM '%s'", VG_PLATFORM);

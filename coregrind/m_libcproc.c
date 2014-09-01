@@ -7,7 +7,7 @@
    This file is part of Valgrind, a dynamic binary instrumentation
    framework.
 
-   Copyright (C) 2000-2011 Julian Seward 
+   Copyright (C) 2000-2013 Julian Seward 
       jseward@acm.org
 
    This program is free software; you can redistribute it and/or
@@ -29,6 +29,7 @@
 */
 
 #include "pub_core_basics.h"
+#include "pub_core_machine.h"    // For VG_(machine_get_VexArchInfo)
 #include "pub_core_vki.h"
 #include "pub_core_vkiscnums.h"
 #include "pub_core_libcbase.h"
@@ -59,12 +60,12 @@
 
 /* As deduced from sp_at_startup, the client's argc, argv[] and
    envp[] as extracted from the client's stack at startup-time. */
-Char** VG_(client_envp) = NULL;
+HChar** VG_(client_envp) = NULL;
 
 /* Path to library directory */
-const Char *VG_(libdir) = VG_LIBDIR;
+const HChar *VG_(libdir) = VG_LIBDIR;
 
-const Char *VG_(LD_PRELOAD_var_name) =
+const HChar *VG_(LD_PRELOAD_var_name) =
 #if defined(VGO_linux)
    "LD_PRELOAD";
 #elif defined(VGO_darwin)
@@ -75,13 +76,13 @@ const Char *VG_(LD_PRELOAD_var_name) =
 
 /* We do getenv without libc's help by snooping around in
    VG_(client_envp) as determined at startup time. */
-Char *VG_(getenv)(Char *varname)
+HChar *VG_(getenv)(const HChar *varname)
 {
    Int i, n;
    vg_assert( VG_(client_envp) );
    n = VG_(strlen)(varname);
    for (i = 0; VG_(client_envp)[i] != NULL; i++) {
-      Char* s = VG_(client_envp)[i];
+      HChar* s = VG_(client_envp)[i];
       if (VG_(strncmp)(varname, s, n) == 0 && s[n] == '=') {
          return & s[n+1];
       }
@@ -89,9 +90,9 @@ Char *VG_(getenv)(Char *varname)
    return NULL;
 }
 
-void  VG_(env_unsetenv) ( Char **env, const Char *varname )
+void  VG_(env_unsetenv) ( HChar **env, const HChar *varname )
 {
-   Char **from, **to;
+   HChar **from, **to;
    vg_assert(env);
    vg_assert(varname);
    to = NULL;
@@ -107,14 +108,15 @@ void  VG_(env_unsetenv) ( Char **env, const Char *varname )
 }
 
 /* set the environment; returns the old env if a new one was allocated */
-Char **VG_(env_setenv) ( Char ***envp, const Char* varname, const Char *val )
+HChar **VG_(env_setenv) ( HChar ***envp, const HChar* varname,
+                          const HChar *val )
 {
-   Char **env = (*envp);
-   Char **cpp;
+   HChar **env = (*envp);
+   HChar **cpp;
    Int len = VG_(strlen)(varname);
-   Char *valstr = VG_(arena_malloc)(VG_AR_CORE, "libcproc.es.1",
-                                    len + VG_(strlen)(val) + 2);
-   Char **oldenv = NULL;
+   HChar *valstr = VG_(arena_malloc)(VG_AR_CORE, "libcproc.es.1",
+                                     len + VG_(strlen)(val) + 2);
+   HChar **oldenv = NULL;
 
    VG_(sprintf)(valstr, "%s=%s", varname, val);
 
@@ -126,7 +128,7 @@ Char **VG_(env_setenv) ( Char ***envp, const Char* varname, const Char *val )
    }
 
    if (env == NULL) {
-      env = VG_(arena_malloc)(VG_AR_CORE, "libcproc.es.2", sizeof(Char **) * 2);
+      env = VG_(arena_malloc)(VG_AR_CORE, "libcproc.es.2", sizeof(HChar *) * 2);
       env[0] = valstr;
       env[1] = NULL;
 
@@ -134,8 +136,8 @@ Char **VG_(env_setenv) ( Char ***envp, const Char* varname, const Char *val )
 
    }  else {
       Int envlen = (cpp-env) + 2;
-      Char **newenv = VG_(arena_malloc)(VG_AR_CORE, "libcproc.es.3",
-                                        envlen * sizeof(Char **));
+      HChar **newenv = VG_(arena_malloc)(VG_AR_CORE, "libcproc.es.3",
+                                         envlen * sizeof(HChar *));
 
       for (cpp = newenv; *env; )
 	 *cpp++ = *env++;
@@ -161,18 +163,18 @@ Char **VG_(env_setenv) ( Char ***envp, const Char* varname, const Char *val )
    This is also careful to mop up any excess ':'s, since empty strings
    delimited by ':' are considered to be '.' in a path.
 */
-static void mash_colon_env(Char *varp, const Char *remove_pattern)
+static void mash_colon_env(HChar *varp, const HChar *remove_pattern)
 {
-   Char *const start = varp;
-   Char *entry_start = varp;
-   Char *output = varp;
+   HChar *const start = varp;
+   HChar *entry_start = varp;
+   HChar *output = varp;
 
    if (varp == NULL)
       return;
 
    while(*varp) {
       if (*varp == ':') {
-	 Char prev;
+	 HChar prev;
 	 Bool match;
 
 	 /* This is a bit subtle: we want to match against the entry
@@ -218,7 +220,7 @@ static void mash_colon_env(Char *varp, const Char *remove_pattern)
 
 // Removes all the Valgrind-added stuff from the passed environment.  Used
 // when starting child processes, so they don't see that added stuff.
-void VG_(env_remove_valgrind_env_stuff)(Char** envp)
+void VG_(env_remove_valgrind_env_stuff)(HChar** envp)
 {
 
 #if defined(VGO_darwin)
@@ -229,10 +231,10 @@ void VG_(env_remove_valgrind_env_stuff)(Char** envp)
 #endif
 
    Int i;
-   Char* ld_preload_str = NULL;
-   Char* ld_library_path_str = NULL;
-   Char* dyld_insert_libraries_str = NULL;
-   Char* buf;
+   HChar* ld_preload_str = NULL;
+   HChar* ld_library_path_str = NULL;
+   HChar* dyld_insert_libraries_str = NULL;
+   HChar* buf;
 
    // Find LD_* variables
    // DDD: should probably conditionally compiled some of this:
@@ -240,12 +242,18 @@ void VG_(env_remove_valgrind_env_stuff)(Char** envp)
    // - LD_PRELOAD is on Linux, not on Darwin, not sure about AIX
    // - DYLD_INSERT_LIBRARIES and DYLD_SHARED_REGION are Darwin-only
    for (i = 0; envp[i] != NULL; i++) {
-      if (VG_(strncmp)(envp[i], "LD_PRELOAD=", 11) == 0)
-         ld_preload_str = VG_(arena_strdup)(VG_AR_CORE, "libcproc.erves.1", &envp[i][11]);
-      if (VG_(strncmp)(envp[i], "LD_LIBRARY_PATH=", 16) == 0)
-         ld_library_path_str = VG_(arena_strdup)(VG_AR_CORE, "libcproc.erves.2", &envp[i][16]);
-      if (VG_(strncmp)(envp[i], "DYLD_INSERT_LIBRARIES=", 22) == 0)
-         dyld_insert_libraries_str = VG_(arena_strdup)(VG_AR_CORE, "libcproc.erves.3", &envp[i][22]);
+      if (VG_(strncmp)(envp[i], "LD_PRELOAD=", 11) == 0) {
+         envp[i] = VG_(arena_strdup)(VG_AR_CORE, "libcproc.erves.1", envp[i]);
+         ld_preload_str = &envp[i][11];
+      }
+      if (VG_(strncmp)(envp[i], "LD_LIBRARY_PATH=", 16) == 0) {
+         envp[i] = VG_(arena_strdup)(VG_AR_CORE, "libcproc.erves.2", envp[i]);
+         ld_library_path_str = &envp[i][16];
+      }
+      if (VG_(strncmp)(envp[i], "DYLD_INSERT_LIBRARIES=", 22) == 0) {
+         envp[i] = VG_(arena_strdup)(VG_AR_CORE, "libcproc.erves.3", envp[i]);
+         dyld_insert_libraries_str = &envp[i][22];
+      }
    }
 
    buf = VG_(arena_malloc)(VG_AR_CORE, "libcproc.erves.4",
@@ -289,11 +297,11 @@ Int VG_(waitpid)(Int pid, Int *status, Int options)
 }
 
 /* clone the environment */
-Char **VG_(env_clone) ( Char **oldenv )
+HChar **VG_(env_clone) ( HChar **oldenv )
 {
-   Char **oldenvp;
-   Char **newenvp;
-   Char **newenv;
+   HChar **oldenvp;
+   HChar **newenvp;
+   HChar **newenv;
    Int  envlen;
 
    vg_assert(oldenv);
@@ -302,7 +310,7 @@ Char **VG_(env_clone) ( Char **oldenv )
    envlen = oldenvp - oldenv + 1;
    
    newenv = VG_(arena_malloc)(VG_AR_CORE, "libcproc.ec.1",
-                              envlen * sizeof(Char **));
+                              envlen * sizeof(HChar *));
 
    oldenvp = oldenv;
    newenvp = newenv;
@@ -316,9 +324,9 @@ Char **VG_(env_clone) ( Char **oldenv )
    return newenv;
 }
 
-void VG_(execv) ( Char* filename, Char** argv )
+void VG_(execv) ( const HChar* filename, HChar** argv )
 {
-   Char** envp;
+   HChar** envp;
    SysRes res;
 
    /* restore the DATA rlimit for the child */
@@ -335,7 +343,7 @@ void VG_(execv) ( Char* filename, Char** argv )
 
 /* Return -1 if error, else 0.  NOTE does not indicate return code of
    child! */
-Int VG_(system) ( Char* cmd )
+Int VG_(system) ( const HChar* cmd )
 {
    Int pid;
    if (cmd == NULL)
@@ -345,10 +353,10 @@ Int VG_(system) ( Char* cmd )
       return -1;
    if (pid == 0) {
       /* child */
-      Char* argv[4] = { "/bin/sh", "-c", cmd, 0 };
-      VG_(execv)(argv[0], argv);
+      const HChar* argv[4] = { "/bin/sh", "-c", cmd, 0 };
+      VG_(execv)(argv[0], (HChar **)argv);
 
-      /* If we're still alive here, execve failed. */
+      /* If we're still alive here, execv failed. */
       VG_(exit)(1);
    } else {
       /* parent */
@@ -435,7 +443,7 @@ Int VG_(gettid)(void)
    SysRes res = VG_(do_syscall0)(__NR_gettid);
 
    if (sr_isError(res) && sr_Res(res) == VKI_ENOSYS) {
-      Char pid[16];      
+      HChar pid[16];      
       /*
        * The gettid system call does not exist. The obvious assumption
        * to make at this point would be that we are running on an older
@@ -453,7 +461,7 @@ Int VG_(gettid)(void)
       res = VG_(do_syscall3)(__NR_readlink, (UWord)"/proc/self",
                              (UWord)pid, sizeof(pid));
       if (!sr_isError(res) && sr_Res(res) > 0) {
-         Char* s;
+         HChar* s;
          pid[sr_Res(res)] = '\0';
          res = VG_(mk_SysRes_Success)(  VG_(strtoll10)(pid, &s) );
          if (*s != '\0') {
@@ -525,7 +533,8 @@ Int VG_(getegid) ( void )
    platform. */
 Int VG_(getgroups)( Int size, UInt* list )
 {
-#  if defined(VGP_x86_linux) || defined(VGP_ppc32_linux)
+#  if defined(VGP_x86_linux) || defined(VGP_ppc32_linux) \
+      || defined(VGP_mips64_linux)
    Int    i;
    SysRes sres;
    UShort list16[64];
@@ -542,7 +551,8 @@ Int VG_(getgroups)( Int size, UInt* list )
 
 #  elif defined(VGP_amd64_linux) || defined(VGP_ppc64_linux)  \
         || defined(VGP_arm_linux)                             \
-        || defined(VGO_darwin) || defined(VGP_s390x_linux)
+        || defined(VGO_darwin) || defined(VGP_s390x_linux)    \
+        || defined(VGP_mips32_linux)
    SysRes sres;
    sres = VG_(do_syscall2)(__NR_getgroups, size, (Addr)list);
    if (sr_isError(sres))
@@ -707,6 +717,58 @@ void VG_(do_atfork_child)(ThreadId tid)
    for (i = 0; i < n_atfork; i++)
       if (atforks[i].child != NULL)
          (*atforks[i].child)(tid);
+}
+
+
+/* ---------------------------------------------------------------------
+   icache invalidation
+   ------------------------------------------------------------------ */
+
+void VG_(invalidate_icache) ( void *ptr, SizeT nbytes )
+{
+   if (nbytes == 0) return;    // nothing to do
+
+   // Get cache info
+   VexArchInfo vai;
+   VG_(machine_get_VexArchInfo)(NULL, &vai);
+
+   // If I-caches are coherent, nothing needs to be done here
+   if (vai.hwcache_info.icaches_maintain_coherence) return;
+
+#  if defined(VGA_ppc32) || defined(VGA_ppc64)
+   Addr startaddr = (Addr) ptr;
+   Addr endaddr   = startaddr + nbytes;
+   Addr cls;
+   Addr addr;
+
+   VG_(machine_get_VexArchInfo)( NULL, &vai );
+   cls = vai.ppc_icache_line_szB;
+
+   /* Stay sane .. */
+   vg_assert(cls == 16 || cls == 32 || cls == 64 || cls == 128);
+
+   startaddr &= ~(cls - 1);
+   for (addr = startaddr; addr < endaddr; addr += cls) {
+      __asm__ __volatile__("dcbst 0,%0" : : "r" (addr));
+   }
+   __asm__ __volatile__("sync");
+   for (addr = startaddr; addr < endaddr; addr += cls) {
+      __asm__ __volatile__("icbi 0,%0" : : "r" (addr));
+   }
+   __asm__ __volatile__("sync; isync");
+
+#  elif defined(VGP_arm_linux)
+   /* ARM cache flushes are privileged, so we must defer to the kernel. */
+   Addr startaddr = (Addr) ptr;
+   Addr endaddr   = startaddr + nbytes;
+   VG_(do_syscall2)(__NR_ARM_cacheflush, startaddr, endaddr);
+
+#  elif defined(VGA_mips32) || defined(VGA_mips64)
+   SysRes sres = VG_(do_syscall3)(__NR_cacheflush, (UWord) ptr,
+                                 (UWord) nbytes, (UWord) 3);
+   vg_assert( sres._isError == 0 );
+
+#  endif
 }
 
 

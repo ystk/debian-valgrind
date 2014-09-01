@@ -1,8 +1,7 @@
-/* -*- mode: C; c-basic-offset: 3; indent-tabs-mode: nil; -*- */
 /*
   This file is part of drd, a thread error detector.
 
-  Copyright (C) 2006-2011 Bart Van Assche <bvanassche@acm.org>.
+  Copyright (C) 2006-2013 Bart Van Assche <bvanassche@acm.org>.
 
   This program is free software; you can redistribute it and/or
   modify it under the terms of the GNU General Public License as
@@ -70,6 +69,12 @@ void DRD_(clientreq_init)(void)
  * DRD's handler for Valgrind client requests. The code below handles both
  * DRD's public and tool-internal client requests.
  */
+#if defined(VGP_mips32_linux) || defined(VGP_mips64_linux)
+ /* There is a cse related issue in gcc for MIPS. Optimization level
+    has to be lowered, so cse related optimizations are not
+    included. */
+ __attribute__((optimize("O1")))
+#endif
 static Bool handle_client_request(ThreadId vg_tid, UWord* arg, UWord* ret)
 {
    UWord result = 0;
@@ -137,7 +142,7 @@ static Bool handle_client_request(ThreadId vg_tid, UWord* arg, UWord* ret)
       break;
 
    case VG_USERREQ__DRD_SET_THREAD_NAME:
-      DRD_(thread_set_name)(drd_tid, (const char*)arg[1]);
+      DRD_(thread_set_name)(drd_tid, (const HChar*)arg[1]);
       break;
 
    case VG_USERREQ__DRD_START_SUPPRESSION:
@@ -221,7 +226,7 @@ static Bool handle_client_request(ThreadId vg_tid, UWord* arg, UWord* ret)
       break;
 
    case VG_USERREQ__DRD_START_TRACE_ADDR:
-      DRD_(start_tracing_address_range)(arg[1], arg[1] + arg[2]);
+      DRD_(start_tracing_address_range)(arg[1], arg[1] + arg[2], False);
       break;
 
    case VG_USERREQ__DRD_STOP_TRACE_ADDR:
@@ -368,7 +373,7 @@ static Bool handle_client_request(ThreadId vg_tid, UWord* arg, UWord* ret)
 
    case VG_USERREQ__POST_COND_DESTROY:
       if (DRD_(thread_leave_synchr)(drd_tid) == 0)
-         DRD_(cond_post_destroy)(arg[1]);
+         DRD_(cond_post_destroy)(arg[1], arg[2]);
       break;
 
    case VG_USERREQ__PRE_COND_WAIT:
@@ -435,7 +440,7 @@ static Bool handle_client_request(ThreadId vg_tid, UWord* arg, UWord* ret)
 
    case VG_USERREQ__POST_SEM_OPEN:
       if (DRD_(thread_leave_synchr)(drd_tid) == 0)
-         DRD_(semaphore_open)(arg[1], (Char*)arg[2], arg[3], arg[4], arg[5]);
+         DRD_(semaphore_open)(arg[1], (HChar*)arg[2], arg[3], arg[4], arg[5]);
       break;
 
    case VG_USERREQ__PRE_SEM_CLOSE:
@@ -543,7 +548,7 @@ static Bool handle_client_request(ThreadId vg_tid, UWord* arg, UWord* ret)
           * freed, e.g. because it points to static data.
           */
          UnimpClReqInfo UICR =
-            { DRD_(thread_get_running_tid)(), (Char*)arg[1] };
+            { DRD_(thread_get_running_tid)(), (HChar*)arg[1] };
          VG_(maybe_record_error)(vg_tid,
                                  UnimpHgClReq,
                                  VG_(get_IP)(vg_tid),
@@ -558,7 +563,7 @@ static Bool handle_client_request(ThreadId vg_tid, UWord* arg, UWord* ret)
           * freed, e.g. because it points to static data.
           */
          UnimpClReqInfo UICR =
-            { DRD_(thread_get_running_tid)(), (Char*)arg[1] };
+            { DRD_(thread_get_running_tid)(), (HChar*)arg[1] };
          VG_(maybe_record_error)(vg_tid,
                                  UnimpDrdClReq,
                                  VG_(get_IP)(vg_tid),

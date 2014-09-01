@@ -1,8 +1,7 @@
-/* -*- mode: C; c-basic-offset: 3; indent-tabs-mode: nil; -*- */
 /*
   This file is part of drd, a thread error detector.
 
-  Copyright (C) 2006-2011 Bart Van Assche <bvanassche@acm.org>.
+  Copyright (C) 2006-2013 Bart Van Assche <bvanassche@acm.org>.
 
   This program is free software; you can redistribute it and/or
   modify it under the terms of the GNU General Public License as
@@ -56,8 +55,8 @@ struct barrier_thread_info
 static void barrier_cleanup(struct barrier_info* p);
 static void barrier_delete_thread(struct barrier_info* const p,
                                   const DrdThreadId tid);
-static const char* barrier_get_typename(struct barrier_info* const p);
-static const char* barrier_type_name(const BarrierT bt);
+static const HChar* barrier_get_typename(struct barrier_info* const p);
+static const HChar* barrier_type_name(const BarrierT bt);
 static
 void barrier_report_wait_delete_race(const struct barrier_info* const p,
                                      const struct barrier_thread_info* const q);
@@ -473,15 +472,14 @@ void DRD_(barrier_post_wait)(const DrdThreadId tid, const Addr barrier,
    {
       VectorClock old_vc;
 
-      DRD_(vc_copy)(&old_vc, &DRD_(g_threadinfo)[tid].last->vc);
+      DRD_(vc_copy)(&old_vc, DRD_(thread_get_vc)(tid));
       VG_(OSetGen_ResetIter)(oset);
       for ( ; (r = VG_(OSetGen_Next)(oset)) != 0; )
       {
          if (r != q)
          {
             tl_assert(r->sg);
-            DRD_(vc_combine)(&DRD_(g_threadinfo)[tid].last->vc,
-                             &r->sg->vc);
+            DRD_(vc_combine)(DRD_(thread_get_vc)(tid), &r->sg->vc);
          }
       }
       DRD_(thread_update_conflict_set)(tid, &old_vc);
@@ -542,14 +540,14 @@ void barrier_report_wait_delete_race(const struct barrier_info* const p,
    }
 }
 
-static const char* barrier_get_typename(struct barrier_info* const p)
+static const HChar* barrier_get_typename(struct barrier_info* const p)
 {
    tl_assert(p);
 
    return barrier_type_name(p->barrier_type);
 }
 
-static const char* barrier_type_name(const BarrierT bt)
+static const HChar* barrier_type_name(const BarrierT bt)
 {
    switch (bt)
    {

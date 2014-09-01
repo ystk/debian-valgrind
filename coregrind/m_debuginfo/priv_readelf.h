@@ -8,7 +8,7 @@
    This file is part of Valgrind, a dynamic binary instrumentation
    framework.
 
-   Copyright (C) 2000-2011 Julian Seward 
+   Copyright (C) 2000-2013 Julian Seward 
       jseward@acm.org
 
    This program is free software; you can redistribute it and/or
@@ -32,6 +32,9 @@
 #ifndef __PRIV_READELF_H
 #define __PRIV_READELF_H
 
+#include "pub_core_basics.h"     // SizeT
+#include "pub_core_debuginfo.h"  // DebugInfo
+
 /*
    Stabs reader greatly improved by Nick Nethercote, Apr 02.
    This module was also extensively hacked on by Jeremy Fitzhardinge
@@ -40,7 +43,7 @@
 
 /* Identify an ELF object file by peering at the first few bytes of
    it. */
-extern Bool ML_(is_elf_object_file)( void* image, SizeT n_image );
+extern Bool ML_(is_elf_object_file)( void* image, SizeT n_image, Bool rel_ok );
 
 /* The central function for reading ELF debug info.  For the
    object/exe specified by the SegInfo, find ELF sections, then read
@@ -48,7 +51,7 @@ extern Bool ML_(is_elf_object_file)( void* image, SizeT n_image );
    info) and anything else we want, into the tables within the
    supplied SegInfo.
 */
-extern Bool ML_(read_elf_debug_info) ( struct _DebugInfo* di );
+extern Bool ML_(read_elf_debug_info) ( DebugInfo* di );
 
 
 #endif /* ndef __PRIV_READELF_H */

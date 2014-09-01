@@ -41,6 +41,7 @@ EXTRA_DIST =                                        \
 	annotate_smart_pointer.stderr.exp	    \
 	annotate_smart_pointer.vgtest		    \
 	annotate_smart_pointer2.stderr.exp	    \
+	annotate_smart_pointer2.stderr.exp-darwin   \
 	annotate_smart_pointer2.vgtest		    \
 	annotate_spinlock.stderr.exp		    \
 	annotate_spinlock.vgtest		    \
@@ -58,9 +59,13 @@ EXTRA_DIST =                                        \
 	annotate_ignore_write.vgtest		    \
 	annotate_ignore_write2.stderr.exp	    \
 	annotate_ignore_write2.vgtest		    \
-	annotate_trace_memory.stderr.exp	    \
+	annotate_trace_memory.stderr.exp-32bit	    \
+	annotate_trace_memory.stderr.exp-64bit	    \
+	annotate_trace_memory.stderr.exp-mips32	   \
 	annotate_trace_memory.vgtest		    \
-	annotate_trace_memory_xml.stderr.exp	    \
+	annotate_trace_memory_xml.stderr.exp-32bit  \
+	annotate_trace_memory_xml.stderr.exp-64bit  \
+	annotate_trace_memory_xml.stderr.exp-mips32 \
 	annotate_trace_memory_xml.vgtest	    \
 	annotate_static.stderr.exp	            \
 	annotate_static.vgtest		            \
@@ -79,6 +84,8 @@ EXTRA_DIST =                                        \
 	bug-235681.vgtest			    \
 	circular_buffer.stderr.exp		    \
 	circular_buffer.vgtest			    \
+	concurrent_close.stderr.exp		    \
+	concurrent_close.vgtest			    \
 	custom_alloc.stderr.exp			    \
 	custom_alloc.vgtest			    \
 	custom_alloc_fiw.stderr.exp		    \
@@ -154,6 +161,8 @@ EXTRA_DIST =                                        \
 	pth_cancel_locked.vgtest		    \
 	pth_cleanup_handler.stderr.exp		    \
 	pth_cleanup_handler.vgtest		    \
+	pth_cond_destroy_busy.stderr.exp            \
+	pth_cond_destroy_busy.vgtest                \
 	pth_cond_race.stderr.exp                    \
 	pth_cond_race.vgtest                        \
 	pth_cond_race2.stderr.exp                   \
@@ -215,17 +224,23 @@ EXTRA_DIST =                                        \
 	sem_open3.vgtest                            \
 	sem_open_traced.stderr.exp                  \
 	sem_open_traced.vgtest                      \
+	sem_wait.stderr.exp                         \
+	sem_wait.vgtest                             \
 	sigalrm.stderr.exp                          \
 	sigalrm.vgtest                              \
 	sigaltstack.stderr.exp                      \
 	sigaltstack.vgtest                          \
+	std_thread.stderr.exp		  	    \
+	std_thread.vgtest			    \
 	tc01_simple_race.stderr.exp                 \
 	tc01_simple_race.vgtest                     \
 	tc02_simple_tls.stderr.exp                  \
 	tc02_simple_tls.vgtest                      \
 	tc03_re_excl.stderr.exp                     \
 	tc03_re_excl.vgtest                         \
-	tc04_free_lock.stderr.exp                   \
+	tc04_free_lock.stderr.exp-x86               \
+	tc04_free_lock.stderr.exp-ppc               \
+	tc04_free_lock.stderr.exp-s390              \
 	tc04_free_lock.vgtest                       \
 	tc05_simple_race.stderr.exp                 \
 	tc05_simple_race.vgtest                     \
@@ -237,8 +252,10 @@ EXTRA_DIST =                                        \
 	tc08_hbl2.stderr.exp                        \
 	tc08_hbl2.stdout.exp                        \
 	tc08_hbl2.vgtest                            \
-	tc09_bad_unlock.stderr.exp                  \
+	tc09_bad_unlock.stderr.exp-x86              \
+	tc09_bad_unlock.stderr.exp-ppc              \
 	tc09_bad_unlock.stderr.exp-glibc2.8         \
+	tc09_bad_unlock.stderr.exp-s390             \
 	tc09_bad_unlock.vgtest                      \
 	tc10_rec_lock.stderr.exp                    \
 	tc10_rec_lock.vgtest                        \
@@ -293,8 +310,10 @@ check_PROGRAMS =      \
   annotate_ignore_write \
   annotate_publish_hg \
   annotate_static     \
+  annotate_trace_memory \
   bug-235681          \
   custom_alloc        \
+  concurrent_close    \
   fp_race             \
   free_is_write	      \
   hold_lock           \
@@ -305,6 +324,7 @@ check_PROGRAMS =      \
   pth_broadcast       \
   pth_cancel_locked   \
   pth_cleanup_handler \
+  pth_cond_destroy_busy \
   pth_cond_race       \
   pth_create_chain    \
   pth_detached        \
@@ -345,6 +365,15 @@ check_PROGRAMS +=        \
   tsan_unittest
 endif
 
+# clang 3.3 will generate errors about libstdc++ headers from 
+# gcc (Ubuntu/Linaro 4.6.3-1ubuntu5) 4.6.3
+if CXX_CAN_INCLUDE_THREAD_HEADER
+if HAVE_SHARED_POINTER_ANNOTATION
+check_PROGRAMS += \
+  std_thread
+endif
+endif
+
 if HAVE_OPENMP
 check_PROGRAMS += omp_matinv omp_prime omp_printf
 endif
@@ -362,6 +391,10 @@ if HAVE_PTHREAD_SPINLOCK
 check_PROGRAMS += pth_spinlock
 endif
 
+if !VGCONF_OS_IS_DARWIN
+check_PROGRAMS += sem_wait
+endif
+
 
 AM_CFLAGS   += $(AM_FLAG_M3264_PRI) @FLAG_W_EXTRA@ -Wno-inline -Wno-unused-parameter
 AM_CXXFLAGS += $(AM_FLAG_M3264_PRI) @FLAG_W_EXTRA@ -Wno-inline -Wno-unused-parameter
@@ -369,6 +402,7 @@ AM_CXXFLAGS += $(AM_FLAG_M3264_PRI) @FLAG_W_EXTRA@ -Wno-inline -Wno-unused-param
 LDADD = -lpthread
 
 
+concurrent_close_SOURCES    = concurrent_close.cpp
 monitor_example_SOURCES     = monitor_example.cpp
 new_delete_SOURCES          = new_delete.cpp
 
@@ -415,3 +449,8 @@ endif
 if HAVE_PTHREAD_BARRIER
 matinv_LDADD                = $(LDADD) -lm
 endif
+
+std_thread_SOURCES          = std_thread.cpp
+std_thread_CXXFLAGS         = $(AM_CXXFLAGS) -std=c++0x
+
+sem_wait_SOURCES            = sem_wait.cpp

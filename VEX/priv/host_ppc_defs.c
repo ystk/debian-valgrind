@@ -7,7 +7,7 @@
    This file is part of Valgrind, a dynamic binary instrumentation
    framework.
 
-   Copyright (C) 2004-2011 OpenWorks LLP
+   Copyright (C) 2004-2013 OpenWorks LLP
       info@open-works.net
 
    This program is free software; you can redistribute it and/or
@@ -47,7 +47,7 @@
 void ppHRegPPC ( HReg reg ) 
 {
    Int r;
-   static HChar* ireg32_names[32] 
+   static const HChar* ireg32_names[32] 
       = { "%r0",  "%r1",  "%r2",  "%r3",
           "%r4",  "%r5",  "%r6",  "%r7",
           "%r8",  "%r9",  "%r10", "%r11",
@@ -273,7 +273,7 @@ void getAllocableRegs_PPC ( Int* nregs, HReg** arr, Bool mode64 )
 
 /* --------- Condition codes, Intel encoding. --------- */
 
-HChar* showPPCCondCode ( PPCCondCode cond )
+const HChar* showPPCCondCode ( PPCCondCode cond )
 {
    if (cond.test == Pct_ALWAYS) return "always";
 
@@ -572,7 +572,7 @@ static void mapRegs_PPCVI5s ( HRegRemap* m, PPCVI5s* dst ) {
 
 /* --------- Instructions. --------- */
 
-HChar* showPPCUnaryOp ( PPCUnaryOp op ) {
+const HChar* showPPCUnaryOp ( PPCUnaryOp op ) {
    switch (op) {
    case Pun_NOT:   return "not";
    case Pun_NEG:   return "neg";
@@ -583,7 +583,7 @@ HChar* showPPCUnaryOp ( PPCUnaryOp op ) {
    }
 }
 
-HChar* showPPCAluOp ( PPCAluOp op, Bool immR ) {
+const HChar* showPPCAluOp ( PPCAluOp op, Bool immR ) {
    switch (op) {
       case Palu_ADD: return immR ? "addi"  : "add";
       case Palu_SUB: return immR ? "subi"  : "sub";
@@ -594,7 +594,7 @@ HChar* showPPCAluOp ( PPCAluOp op, Bool immR ) {
    }
 }
 
-HChar* showPPCShftOp ( PPCShftOp op, Bool immR, Bool sz32 ) {
+const HChar* showPPCShftOp ( PPCShftOp op, Bool immR, Bool sz32 ) {
    switch (op) {
       case Pshft_SHL: return sz32 ? (immR ? "slwi"  : "slw") : 
                                     (immR ? "sldi"  : "sld");
@@ -606,7 +606,7 @@ HChar* showPPCShftOp ( PPCShftOp op, Bool immR, Bool sz32 ) {
    }
 }
 
-HChar* showPPCFpOp ( PPCFpOp op ) {
+const HChar* showPPCFpOp ( PPCFpOp op ) {
    switch (op) {
       case Pfp_ADDD:   return "fadd";
       case Pfp_SUBD:   return "fsub";
@@ -630,11 +630,32 @@ HChar* showPPCFpOp ( PPCFpOp op ) {
       case Pfp_FRIN:   return "frin";
       case Pfp_FRIP:   return "frip";
       case Pfp_FRIZ:   return "friz";
+      case Pfp_DFPADD:     return "dadd";
+      case Pfp_DFPADDQ:    return "daddq";
+      case Pfp_DFPSUB:     return "dsub";
+      case Pfp_DFPSUBQ:    return "dsubq";
+      case Pfp_DFPMUL:     return "dmul";
+      case Pfp_DFPMULQ:    return "dmulq";
+      case Pfp_DFPDIV:     return "ddivd";
+      case Pfp_DFPDIVQ:    return "ddivq";
+      case Pfp_DCTDP:      return "dctdp";
+      case Pfp_DRSP:       return "drsp";
+      case Pfp_DCTFIX:     return "dctfix";
+      case Pfp_DCFFIX:     return "dcffix";
+      case Pfp_DCTQPQ:     return "dctqpq";
+      case Pfp_DCFFIXQ:    return "dcffixq";
+      case Pfp_DQUA:       return "dqua";
+      case Pfp_DQUAQ:      return "dquaq";
+      case Pfp_DXEX:       return "dxex";
+      case Pfp_DXEXQ:      return "dxexq";
+      case Pfp_DIEX:       return "diex";
+      case Pfp_DIEXQ:      return "diexq";
+      case Pfp_RRDTR:      return "rrdtr";
       default: vpanic("showPPCFpOp");
    }
 }
 
-HChar* showPPCAvOp ( PPCAvOp op ) {
+const HChar* showPPCAvOp ( PPCAvOp op ) {
    switch (op) {
 
    /* Unary */
@@ -653,18 +674,19 @@ HChar* showPPCAvOp ( PPCAvOp op ) {
    case Pav_UNPCKLPIX: return "vupklpx";
 
    /* Integer binary */
-   case Pav_ADDU:      return "vaddu_m";  // b,h,w
-   case Pav_QADDU:     return "vaddu_s";  // b,h,w
-   case Pav_QADDS:     return "vadds_s";  // b,h,w
+   case Pav_ADDU:      return "vaddu_m";  // b,h,w,dw
+   case Pav_QADDU:     return "vaddu_s";  // b,h,w,dw
+   case Pav_QADDS:     return "vadds_s";  // b,h,w,dw
      
-   case Pav_SUBU:      return "vsubu_m";  // b,h,w
-   case Pav_QSUBU:     return "vsubu_s";  // b,h,w
-   case Pav_QSUBS:     return "vsubs_s";  // b,h,w
+   case Pav_SUBU:      return "vsubu_m";  // b,h,w,dw
+   case Pav_QSUBU:     return "vsubu_s";  // b,h,w,dw
+   case Pav_QSUBS:     return "vsubs_s";  // b,h,w,dw
      
-   case Pav_OMULU:     return "vmulou";   // b,h
-   case Pav_OMULS:     return "vmulos";   // b,h
-   case Pav_EMULU:     return "vmuleu";   // b,h
-   case Pav_EMULS:     return "vmules";   // b,h
+   case Pav_MULU:      return "vmulu";    // w
+   case Pav_OMULU:     return "vmulou";   // b,h,w
+   case Pav_OMULS:     return "vmulos";   // b,h,w
+   case Pav_EMULU:     return "vmuleu";   // b,h,w
+   case Pav_EMULS:     return "vmules";   // b,h,w
   
    case Pav_AVGU:      return "vavgu";    // b,h,w
    case Pav_AVGS:      return "vavgs";    // b,h,w
@@ -681,13 +703,13 @@ HChar* showPPCAvOp ( PPCAvOp op ) {
    case Pav_CMPGTS:    return "vcmpgts";  // b,h,w
 
    /* Shift */
-   case Pav_SHL:       return "vsl";      // ' ',b,h,w
-   case Pav_SHR:       return "vsr";      // ' ',b,h,w
-   case Pav_SAR:       return "vsra";     // b,h,w
-   case Pav_ROTL:      return "vrl";      // b,h,w
+   case Pav_SHL:       return "vsl";      // ' ',b,h,w,dw
+   case Pav_SHR:       return "vsr";      // ' ',b,h,w,dw
+   case Pav_SAR:       return "vsra";     // b,h,w,dw
+   case Pav_ROTL:      return "vrl";      // b,h,w,dw
 
    /* Pack */
-   case Pav_PACKUU:    return "vpku_um";  // h,w
+   case Pav_PACKUU:    return "vpku_um";  // h,w,dw
    case Pav_QPACKUU:   return "vpku_us";  // h,w
    case Pav_QPACKSU:   return "vpks_us";  // h,w
    case Pav_QPACKSS:   return "vpks_ss";  // h,w
@@ -697,11 +719,40 @@ HChar* showPPCAvOp ( PPCAvOp op ) {
    case Pav_MRGHI:     return "vmrgh";    // b,h,w
    case Pav_MRGLO:     return "vmrgl";    // b,h,w
 
+   /* Concatenation */
+   case Pav_CATODD:     return "vmrgow";    // w
+   case Pav_CATEVEN:    return "vmrgew";    // w
+
+   /* SHA */
+   case Pav_SHA256:     return "vshasigmaw"; // w
+   case Pav_SHA512:     return "vshasigmaw"; // dw
+
+   /* BCD */
+   case Pav_BCDAdd:     return "bcdadd.";  // qw
+   case Pav_BCDSub:     return "bcdsub.";  // qw
+
+   /* Polynomial arith */
+   case Pav_POLYMULADD: return "vpmsum";   // b, h, w, d
+
+   /* Cipher */
+   case Pav_CIPHERV128:  case Pav_CIPHERLV128:
+   case Pav_NCIPHERV128: case Pav_NCIPHERLV128:
+   case Pav_CIPHERSUBV128: return "v_cipher_";  // qw
+
+   /* zero count */
+   case Pav_ZEROCNTBYTE: case Pav_ZEROCNTWORD:
+   case Pav_ZEROCNTHALF: case Pav_ZEROCNTDBL:
+      return "vclz_";                           // b, h, w, d
+
+   /* vector gather (byte-by-byte bit matrix transpose) */
+   case Pav_BITMTXXPOSE:
+      return "vgbbd";
+
    default: vpanic("showPPCAvOp");
    }
 }
 
-HChar* showPPCAvFpOp ( PPCAvFpOp op ) {
+const HChar* showPPCAvFpOp ( PPCAvFpOp op ) {
    switch (op) {
    /* Floating Point Binary */
    case Pavfp_ADDF:      return "vaddfp";
@@ -818,25 +869,47 @@ PPCInstr* PPCInstr_Div ( Bool extended, Bool syned, Bool sz32,
    return i;
 }
 PPCInstr* PPCInstr_Call ( PPCCondCode cond, 
-                          Addr64 target, UInt argiregs ) {
+                          Addr64 target, UInt argiregs, RetLoc rloc ) {
    UInt mask;
    PPCInstr* i          = LibVEX_Alloc(sizeof(PPCInstr));
    i->tag               = Pin_Call;
    i->Pin.Call.cond     = cond;
    i->Pin.Call.target   = target;
    i->Pin.Call.argiregs = argiregs;
+   i->Pin.Call.rloc     = rloc;
    /* Only r3 .. r10 inclusive may be used as arg regs. Hence: */
    mask = (1<<3)|(1<<4)|(1<<5)|(1<<6)|(1<<7)|(1<<8)|(1<<9)|(1<<10);
    vassert(0 == (argiregs & ~mask));
+   vassert(is_sane_RetLoc(rloc));
    return i;
 }
-PPCInstr* PPCInstr_Goto ( IRJumpKind jk, 
-                          PPCCondCode cond, PPCRI* dst ) {
-   PPCInstr* i      = LibVEX_Alloc(sizeof(PPCInstr));
-   i->tag           = Pin_Goto;
-   i->Pin.Goto.cond = cond;
-   i->Pin.Goto.dst  = dst;
-   i->Pin.Goto.jk   = jk;
+PPCInstr* PPCInstr_XDirect ( Addr64 dstGA, PPCAMode* amCIA,
+                             PPCCondCode cond, Bool toFastEP ) {
+   PPCInstr* i             = LibVEX_Alloc(sizeof(PPCInstr));
+   i->tag                  = Pin_XDirect;
+   i->Pin.XDirect.dstGA    = dstGA;
+   i->Pin.XDirect.amCIA    = amCIA;
+   i->Pin.XDirect.cond     = cond;
+   i->Pin.XDirect.toFastEP = toFastEP;
+   return i;
+}
+PPCInstr* PPCInstr_XIndir ( HReg dstGA, PPCAMode* amCIA,
+                            PPCCondCode cond ) {
+   PPCInstr* i         = LibVEX_Alloc(sizeof(PPCInstr));
+   i->tag              = Pin_XIndir;
+   i->Pin.XIndir.dstGA = dstGA;
+   i->Pin.XIndir.amCIA = amCIA;
+   i->Pin.XIndir.cond  = cond;
+   return i;
+}
+PPCInstr* PPCInstr_XAssisted ( HReg dstGA, PPCAMode* amCIA,
+                               PPCCondCode cond, IRJumpKind jk ) {
+   PPCInstr* i            = LibVEX_Alloc(sizeof(PPCInstr));
+   i->tag                 = Pin_XAssisted;
+   i->Pin.XAssisted.dstGA = dstGA;
+   i->Pin.XAssisted.amCIA = amCIA;
+   i->Pin.XAssisted.cond  = cond;
+   i->Pin.XAssisted.jk    = jk;
    return i;
 }
 PPCInstr* PPCInstr_CMov  ( PPCCondCode cond, 
@@ -970,6 +1043,187 @@ PPCInstr* PPCInstr_FpRSP ( HReg dst, HReg src ) {
    i->Pin.FpRSP.src = src;
    return i;
 }
+PPCInstr* PPCInstr_Dfp64Unary(PPCFpOp op, HReg dst, HReg src) {
+   PPCInstr* i = LibVEX_Alloc( sizeof(PPCInstr) );
+   i->tag = Pin_Dfp64Unary;
+   i->Pin.Dfp64Unary.op = op;
+   i->Pin.Dfp64Unary.dst = dst;
+   i->Pin.Dfp64Unary.src = src;
+   return i;
+}
+PPCInstr* PPCInstr_Dfp64Binary(PPCFpOp op, HReg dst, HReg srcL, HReg srcR) {
+   PPCInstr* i = LibVEX_Alloc( sizeof(PPCInstr) );
+   i->tag = Pin_Dfp64Binary;
+   i->Pin.Dfp64Binary.op = op;
+   i->Pin.Dfp64Binary.dst = dst;
+   i->Pin.Dfp64Binary.srcL = srcL;
+   i->Pin.Dfp64Binary.srcR = srcR;
+   return i;
+}
+PPCInstr* PPCInstr_DfpShift ( PPCFpOp op, HReg dst, HReg src, PPCRI* shift ) {
+   PPCInstr* i            = LibVEX_Alloc(sizeof(PPCInstr));
+   i->tag                 = Pin_DfpShift;
+   i->Pin.DfpShift.op     = op;
+   i->Pin.DfpShift.shift  = shift;
+   i->Pin.DfpShift.src    = src;
+   i->Pin.DfpShift.dst    = dst;
+   return i;
+}
+PPCInstr* PPCInstr_Dfp128Unary(PPCFpOp op, HReg dst_hi, HReg dst_lo,
+                                HReg src_hi, HReg src_lo) {
+   PPCInstr* i = LibVEX_Alloc( sizeof(PPCInstr) );
+   i->tag = Pin_Dfp128Unary;
+   i->Pin.Dfp128Unary.op = op;
+   i->Pin.Dfp128Unary.dst_hi = dst_hi;
+   i->Pin.Dfp128Unary.dst_lo = dst_lo;
+   i->Pin.Dfp128Unary.src_hi = src_hi;
+   i->Pin.Dfp128Unary.src_lo = src_lo;
+   return i;
+}
+PPCInstr* PPCInstr_Dfp128Binary(PPCFpOp op, HReg dst_hi, HReg dst_lo,
+                                HReg srcR_hi, HReg srcR_lo) {
+   /* dst is used to pass the srcL argument and return the result */
+   PPCInstr* i = LibVEX_Alloc( sizeof(PPCInstr) );
+   i->tag = Pin_Dfp128Binary;
+   i->Pin.Dfp128Binary.op = op;
+   i->Pin.Dfp128Binary.dst_hi = dst_hi;
+   i->Pin.Dfp128Binary.dst_lo = dst_lo;
+   i->Pin.Dfp128Binary.srcR_hi = srcR_hi;
+   i->Pin.Dfp128Binary.srcR_lo = srcR_lo;
+   return i;
+}
+PPCInstr* PPCInstr_DfpShift128 ( PPCFpOp op, HReg dst_hi, HReg dst_lo, 
+                                 HReg src_hi, HReg src_lo,
+                                 PPCRI* shift ) {
+   PPCInstr* i               = LibVEX_Alloc(sizeof(PPCInstr));
+   i->tag                    = Pin_DfpShift128;
+   i->Pin.DfpShift128.op     = op;
+   i->Pin.DfpShift128.shift  = shift;
+   i->Pin.DfpShift128.src_hi = src_hi;
+   i->Pin.DfpShift128.src_lo = src_lo;
+   i->Pin.DfpShift128.dst_hi = dst_hi;
+   i->Pin.DfpShift128.dst_lo = dst_lo;
+   return i;
+}
+PPCInstr* PPCInstr_DfpRound ( HReg dst, HReg src, PPCRI* r_rmc ) {
+   PPCInstr* i           = LibVEX_Alloc(sizeof(PPCInstr));
+   i->tag                = Pin_DfpRound;
+   i->Pin.DfpRound.dst   = dst;
+   i->Pin.DfpRound.src   = src;
+   i->Pin.DfpRound.r_rmc = r_rmc;
+   return i;
+}
+PPCInstr* PPCInstr_DfpRound128 ( HReg dst_hi, HReg dst_lo, HReg src_hi, 
+                                 HReg src_lo, PPCRI* r_rmc ) {
+   PPCInstr* i               = LibVEX_Alloc(sizeof(PPCInstr));
+   i->tag                    = Pin_DfpRound128;
+   i->Pin.DfpRound128.dst_hi = dst_hi;
+   i->Pin.DfpRound128.dst_lo = dst_lo;
+   i->Pin.DfpRound128.src_hi = src_hi;
+   i->Pin.DfpRound128.src_lo = src_lo;
+   i->Pin.DfpRound128.r_rmc  = r_rmc;
+   return i;
+}
+PPCInstr* PPCInstr_DfpQuantize ( PPCFpOp op, HReg dst, HReg srcL, HReg srcR,
+                                 PPCRI* rmc ) {
+   PPCInstr* i             = LibVEX_Alloc(sizeof(PPCInstr));
+   i->tag                  = Pin_DfpQuantize;
+   i->Pin.DfpQuantize.op   = op;
+   i->Pin.DfpQuantize.dst  = dst;
+   i->Pin.DfpQuantize.srcL = srcL;
+   i->Pin.DfpQuantize.srcR = srcR;
+   i->Pin.DfpQuantize.rmc  = rmc;
+   return i;
+}
+PPCInstr* PPCInstr_DfpQuantize128 ( PPCFpOp op, HReg dst_hi, HReg dst_lo,
+                                    HReg src_hi, HReg src_lo, PPCRI* rmc ) {
+   /* dst is used to pass left operand in and return result */
+   PPCInstr* i                  = LibVEX_Alloc(sizeof(PPCInstr));
+   i->tag                       = Pin_DfpQuantize128;
+   i->Pin.DfpQuantize128.op     = op;
+   i->Pin.DfpQuantize128.dst_hi = dst_hi;
+   i->Pin.DfpQuantize128.dst_lo = dst_lo;
+   i->Pin.DfpQuantize128.src_hi = src_hi;
+   i->Pin.DfpQuantize128.src_lo = src_lo;
+   i->Pin.DfpQuantize128.rmc    = rmc;
+   return i;
+}
+PPCInstr* PPCInstr_DfpD128toD64 ( PPCFpOp op, HReg dst,
+                                  HReg src_hi, HReg src_lo ) {
+   PPCInstr* i                = LibVEX_Alloc(sizeof(PPCInstr));
+   i->tag                     = Pin_DfpD128toD64;
+   i->Pin.DfpD128toD64.op     = op;
+   i->Pin.DfpD128toD64.src_hi = src_hi;
+   i->Pin.DfpD128toD64.src_lo = src_lo;
+   i->Pin.DfpD128toD64.dst    = dst;
+   return i;
+}
+PPCInstr* PPCInstr_DfpI64StoD128 ( PPCFpOp op, HReg dst_hi,
+                                   HReg dst_lo, HReg src ) {
+   PPCInstr* i                 = LibVEX_Alloc(sizeof(PPCInstr));
+   i->tag                      = Pin_DfpI64StoD128;
+   i->Pin.DfpI64StoD128.op     = op;
+   i->Pin.DfpI64StoD128.src    = src;
+   i->Pin.DfpI64StoD128.dst_hi = dst_hi;
+   i->Pin.DfpI64StoD128.dst_lo = dst_lo;
+   return i;
+}
+PPCInstr* PPCInstr_ExtractExpD128 ( PPCFpOp op, HReg dst,
+                                    HReg src_hi, HReg src_lo ) {
+   /* dst is used to pass the srcL argument */                             
+   PPCInstr* i                  = LibVEX_Alloc(sizeof(PPCInstr));
+   i->tag                       = Pin_ExtractExpD128;
+   i->Pin.ExtractExpD128.op     = op;
+   i->Pin.ExtractExpD128.dst    = dst;
+   i->Pin.ExtractExpD128.src_hi = src_hi;
+   i->Pin.ExtractExpD128.src_lo = src_lo;
+   return i;
+}
+PPCInstr* PPCInstr_InsertExpD128 ( PPCFpOp op, HReg dst_hi, HReg dst_lo,   
+                                   HReg srcL, HReg srcR_hi, HReg srcR_lo ) {
+   /* dst is used to pass the srcL argument */                             
+   PPCInstr* i                  = LibVEX_Alloc(sizeof(PPCInstr));
+   i->tag                       = Pin_InsertExpD128;
+   i->Pin.InsertExpD128.op      = op;
+   i->Pin.InsertExpD128.dst_hi  = dst_hi;
+   i->Pin.InsertExpD128.dst_lo  = dst_lo;
+   i->Pin.InsertExpD128.srcL    = srcL;
+   i->Pin.InsertExpD128.srcR_hi = srcR_hi;
+   i->Pin.InsertExpD128.srcR_lo = srcR_lo;
+   return i;
+}
+PPCInstr* PPCInstr_Dfp64Cmp (/* UInt crfD,*/ HReg dst, HReg srcL, HReg srcR ) {
+   PPCInstr* i          = LibVEX_Alloc(sizeof(PPCInstr));
+   i->tag               = Pin_Dfp64Cmp;
+   i->Pin.Dfp64Cmp.dst = dst;
+   i->Pin.Dfp64Cmp.srcL = srcL;
+   i->Pin.Dfp64Cmp.srcR = srcR;
+   return i;                                                   
+}
+PPCInstr* PPCInstr_Dfp128Cmp ( HReg dst, HReg srcL_hi, HReg srcL_lo,
+                               HReg srcR_hi, HReg srcR_lo ) {
+   PPCInstr* i               = LibVEX_Alloc(sizeof(PPCInstr));
+   i->tag                    = Pin_Dfp128Cmp;
+   i->Pin.Dfp128Cmp.dst      = dst;
+   i->Pin.Dfp128Cmp.srcL_hi  = srcL_hi;
+   i->Pin.Dfp128Cmp.srcL_lo  = srcL_lo;
+   i->Pin.Dfp128Cmp.srcR_hi  = srcR_hi;
+   i->Pin.Dfp128Cmp.srcR_lo  = srcR_lo;
+   return i;                                                   
+}
+PPCInstr* PPCInstr_EvCheck ( PPCAMode* amCounter,
+                             PPCAMode* amFailAddr ) {
+   PPCInstr* i               = LibVEX_Alloc(sizeof(PPCInstr));
+   i->tag                    = Pin_EvCheck;
+   i->Pin.EvCheck.amCounter  = amCounter;
+   i->Pin.EvCheck.amFailAddr = amFailAddr;
+   return i;
+}
+PPCInstr* PPCInstr_ProfInc ( void ) {
+   PPCInstr* i = LibVEX_Alloc(sizeof(PPCInstr));
+   i->tag      = Pin_ProfInc;
+   return i;
+}
 
 /*
 Valid combo | fromI | int32 | syned | flt64 |
@@ -1040,10 +1294,11 @@ PPCInstr* PPCInstr_FpCMov ( PPCCondCode cond, HReg dst, HReg src ) {
    vassert(cond.test != Pct_ALWAYS);
    return i;
 }
-PPCInstr* PPCInstr_FpLdFPSCR ( HReg src ) {
+PPCInstr* PPCInstr_FpLdFPSCR ( HReg src, Bool dfp_rm ) {
    PPCInstr* i          = LibVEX_Alloc(sizeof(PPCInstr));
    i->tag               = Pin_FpLdFPSCR;
    i->Pin.FpLdFPSCR.src = src;
+   i->Pin.FpLdFPSCR.dfp_rm = dfp_rm ? 1 : 0;
    return i;
 }
 PPCInstr* PPCInstr_FpCmp ( HReg dst, HReg srcL, HReg srcR ) {
@@ -1123,6 +1378,17 @@ PPCInstr* PPCInstr_AvBin32x4 ( PPCAvOp op, HReg dst,
    i->Pin.AvBin32x4.srcR = srcR;
    return i;
 }
+PPCInstr* PPCInstr_AvBin64x2 ( PPCAvOp op, HReg dst,
+                               HReg srcL, HReg srcR ) {
+   PPCInstr* i           = LibVEX_Alloc(sizeof(PPCInstr));
+   i->tag                = Pin_AvBin64x2;
+   i->Pin.AvBin64x2.op   = op;
+   i->Pin.AvBin64x2.dst  = dst;
+   i->Pin.AvBin64x2.srcL = srcL;
+   i->Pin.AvBin64x2.srcR = srcR;
+   return i;
+}
+
 PPCInstr* PPCInstr_AvBin32Fx4 ( PPCAvFpOp op, HReg dst,
                                 HReg srcL, HReg srcR ) {
    PPCInstr* i            = LibVEX_Alloc(sizeof(PPCInstr));
@@ -1150,6 +1416,7 @@ PPCInstr* PPCInstr_AvPerm ( HReg dst, HReg srcL, HReg srcR, HReg ctl ) {
    i->Pin.AvPerm.ctl  = ctl;
    return i;
 }
+
 PPCInstr* PPCInstr_AvSel ( HReg ctl, HReg dst, HReg srcL, HReg srcR ) {
    PPCInstr* i       = LibVEX_Alloc(sizeof(PPCInstr));
    i->tag            = Pin_AvSel;
@@ -1192,6 +1459,45 @@ PPCInstr* PPCInstr_AvLdVSCR ( HReg src ) {
    i->Pin.AvLdVSCR.src = src;
    return i;
 }
+PPCInstr* PPCInstr_AvCipherV128Unary ( PPCAvOp op, HReg dst, HReg src ) {
+   PPCInstr* i              = LibVEX_Alloc(sizeof(PPCInstr));
+   i->tag                   = Pin_AvCipherV128Unary;
+   i->Pin.AvCipherV128Unary.op   = op;
+   i->Pin.AvCipherV128Unary.dst  = dst;
+   i->Pin.AvCipherV128Unary.src  = src;
+   return i;
+}
+PPCInstr* PPCInstr_AvCipherV128Binary ( PPCAvOp op, HReg dst,
+                                        HReg srcL, HReg srcR ) {
+   PPCInstr* i              = LibVEX_Alloc(sizeof(PPCInstr));
+   i->tag                   = Pin_AvCipherV128Binary;
+   i->Pin.AvCipherV128Binary.op   = op;
+   i->Pin.AvCipherV128Binary.dst  = dst;
+   i->Pin.AvCipherV128Binary.srcL = srcL;
+   i->Pin.AvCipherV128Binary.srcR = srcR;
+   return i;
+}
+PPCInstr* PPCInstr_AvHashV128Binary ( PPCAvOp op, HReg dst,
+                                      HReg src, PPCRI* s_field ) {
+   PPCInstr* i              = LibVEX_Alloc(sizeof(PPCInstr));
+   i->tag                   = Pin_AvHashV128Binary;
+   i->Pin.AvHashV128Binary.op  = op;
+   i->Pin.AvHashV128Binary.dst = dst;
+   i->Pin.AvHashV128Binary.src = src;
+   i->Pin.AvHashV128Binary.s_field = s_field;
+   return i;
+}
+PPCInstr* PPCInstr_AvBCDV128Trinary ( PPCAvOp op, HReg dst,
+                                      HReg src1, HReg src2, PPCRI* ps ) {
+   PPCInstr* i = LibVEX_Alloc(sizeof(PPCInstr));
+   i->tag      = Pin_AvBCDV128Trinary;
+   i->Pin.AvBCDV128Trinary.op   = op;
+   i->Pin.AvBCDV128Trinary.dst  = dst;
+   i->Pin.AvBCDV128Trinary.src1 = src1;
+   i->Pin.AvBCDV128Trinary.src2 = src2;
+   i->Pin.AvBCDV128Trinary.ps   = ps;
+   return i;
+}
 
 
 /* Pretty Print instructions */
@@ -1226,7 +1532,7 @@ void ppPPCInstr ( PPCInstr* i, Bool mode64 )
       /* special-case "mr" */
       if (i->Pin.Alu.op == Palu_OR &&   // or Rd,Rs,Rs == mr Rd,Rs
           rh_srcR->tag == Prh_Reg &&
-          rh_srcR->Prh.Reg.reg == r_srcL) {
+          sameHReg(rh_srcR->Prh.Reg.reg, r_srcL)) {
          vex_printf("mr ");
          ppHRegPPC(i->Pin.Alu.dst);
          vex_printf(",");
@@ -1330,29 +1636,58 @@ void ppPPCInstr ( PPCInstr* i, Bool mode64 )
                vex_printf(",");
          }
       }
+      vex_printf(",");
+      ppRetLoc(i->Pin.Call.rloc);
       vex_printf("] }");
       break;
    }
-   case Pin_Goto:
-      vex_printf("goto: ");
-      if (i->Pin.Goto.cond.test != Pct_ALWAYS) {
-         vex_printf("if (%s) ", showPPCCondCode(i->Pin.Goto.cond));
-      }
-      vex_printf("{ ");
-      if (i->Pin.Goto.jk != Ijk_Boring
-          && i->Pin.Goto.jk != Ijk_Call
-          && i->Pin.Goto.jk != Ijk_Ret) {
-         vex_printf("li %%r31,$");
-         ppIRJumpKind(i->Pin.Goto.jk);
-         vex_printf(" ; ");
-      }
-      if (i->Pin.Goto.dst->tag == Pri_Imm) {
-         ppLoadImm(hregPPC_GPR3(mode64), i->Pin.Goto.dst->Pri.Imm,
-                   mode64);
+   case Pin_XDirect:
+      vex_printf("(xDirect) ");
+      vex_printf("if (%s) { ",
+                 showPPCCondCode(i->Pin.XDirect.cond));
+      if (mode64) {
+         vex_printf("imm64 r30,0x%llx; ", i->Pin.XDirect.dstGA);
+         vex_printf("std r30,");
       } else {
-         ppMovReg(hregPPC_GPR3(mode64), i->Pin.Goto.dst->Pri.Reg);
+         vex_printf("imm32 r30,0x%llx; ", i->Pin.XDirect.dstGA);
+         vex_printf("stw r30,");
       }
-      vex_printf(" ; blr }");
+      ppPPCAMode(i->Pin.XDirect.amCIA);
+      vex_printf("; ");
+      if (mode64) {
+         vex_printf("imm64-fixed5 r30,$disp_cp_chain_me_to_%sEP; ",
+                    i->Pin.XDirect.toFastEP ? "fast" : "slow");
+      } else {
+         vex_printf("imm32-fixed2 r30,$disp_cp_chain_me_to_%sEP; ",
+                    i->Pin.XDirect.toFastEP ? "fast" : "slow");
+      }
+      vex_printf("mtctr r30; bctrl }");
+      return;
+   case Pin_XIndir:
+      vex_printf("(xIndir) ");
+      vex_printf("if (%s) { ",
+                 showPPCCondCode(i->Pin.XIndir.cond));
+      vex_printf("%s ", mode64 ? "std" : "stw");
+      ppHRegPPC(i->Pin.XIndir.dstGA);
+      vex_printf(",");
+      ppPPCAMode(i->Pin.XIndir.amCIA);
+      vex_printf("; ");
+      vex_printf("imm%s r30,$disp_cp_xindir; ", mode64 ? "64" : "32");
+      vex_printf("mtctr r30; bctr }");
+      return;
+   case Pin_XAssisted:
+      vex_printf("(xAssisted) ");
+      vex_printf("if (%s) { ",
+                 showPPCCondCode(i->Pin.XAssisted.cond));
+      vex_printf("%s ", mode64 ? "std" : "stw");
+      ppHRegPPC(i->Pin.XAssisted.dstGA);
+      vex_printf(",");
+      ppPPCAMode(i->Pin.XAssisted.amCIA);
+      vex_printf("; ");
+      vex_printf("li r31,$IRJumpKind_to_TRCVAL(%d); ",                            
+                 (Int)i->Pin.XAssisted.jk);
+      vex_printf("imm%s r30,$disp_cp_xindir; ", mode64 ? "64" : "32");
+      vex_printf("mtctr r30; bctr }");
       return;
    case Pin_CMov:
       vex_printf("cmov (%s) ", showPPCCondCode(i->Pin.CMov.cond));
@@ -1374,7 +1709,7 @@ void ppPPCInstr ( PPCInstr* i, Bool mode64 )
    case Pin_Load: {
       Bool idxd = toBool(i->Pin.Load.src->tag == Pam_RR);
       UChar sz = i->Pin.Load.sz;
-      UChar c_sz = sz==1 ? 'b' : sz==2 ? 'h' : sz==4 ? 'w' : 'd';
+      HChar c_sz = sz==1 ? 'b' : sz==2 ? 'h' : sz==4 ? 'w' : 'd';
       vex_printf("l%c%s%s ", c_sz, sz==8 ? "" : "z", idxd ? "x" : "" );
       ppHRegPPC(i->Pin.Load.dst);
       vex_printf(",");
@@ -1390,7 +1725,7 @@ void ppPPCInstr ( PPCInstr* i, Bool mode64 )
    case Pin_Store: {
       UChar sz = i->Pin.Store.sz;
       Bool idxd = toBool(i->Pin.Store.dst->tag == Pam_RR);
-      UChar c_sz = sz==1 ? 'b' : sz==2 ? 'h' : sz==4 ? 'w' : /*8*/ 'd';
+      HChar c_sz = sz==1 ? 'b' : sz==2 ? 'h' : sz==4 ? 'w' : /*8*/ 'd';
       vex_printf("st%c%s ", c_sz, idxd ? "x" : "" );
       ppHRegPPC(i->Pin.Store.src);
       vex_printf(",");
@@ -1492,7 +1827,7 @@ void ppPPCInstr ( PPCInstr* i, Bool mode64 )
       ppHRegPPC(i->Pin.FpRSP.src);
       return;
    case Pin_FpCftI: {
-      HChar* str = "fc?????";
+      const HChar* str = "fc?????";
       /* Note that "fcfids" is missing from below. That instruction would
        * satisfy the predicate:
        *    (i->Pin.FpCftI.fromI == True && i->Pin.FpCftI.int32 == False)
@@ -1547,6 +1882,7 @@ void ppPPCInstr ( PPCInstr* i, Bool mode64 )
    case Pin_FpLdFPSCR:
       vex_printf("mtfsf 0xFF,");
       ppHRegPPC(i->Pin.FpLdFPSCR.src);
+      vex_printf(",0, %s", i->Pin.FpLdFPSCR.dfp_rm ? "1" : "0");
       return;
    case Pin_FpCmp:
       vex_printf("fcmpo %%cr1,");
@@ -1569,10 +1905,10 @@ void ppPPCInstr ( PPCInstr* i, Bool mode64 )
 
    case Pin_AvLdSt: {
       UChar  sz = i->Pin.AvLdSt.sz;
-      HChar* str_size;
+      const HChar* str_size;
       if (i->Pin.AvLdSt.addr->tag == Pam_IR) {
          ppLoadImm(hregPPC_GPR30(mode64),
-                   i->Pin.AvLdSt.addr->Pam.RR.index, mode64);
+                   i->Pin.AvLdSt.addr->Pam.IR.index, mode64);
          vex_printf(" ; ");
       }
       str_size = sz==1 ? "eb" : sz==2 ? "eh" : sz==4 ? "ew" : "";
@@ -1628,6 +1964,14 @@ void ppPPCInstr ( PPCInstr* i, Bool mode64 )
       vex_printf(",");
       ppHRegPPC(i->Pin.AvBin32x4.srcR);
       return;
+   case Pin_AvBin64x2:
+      vex_printf("%s(w) ", showPPCAvOp(i->Pin.AvBin64x2.op));
+      ppHRegPPC(i->Pin.AvBin64x2.dst);
+      vex_printf(",");
+      ppHRegPPC(i->Pin.AvBin64x2.srcL);
+      vex_printf(",");
+      ppHRegPPC(i->Pin.AvBin64x2.srcR);
+      return;
    case Pin_AvBin32Fx4:
       vex_printf("%s ", showPPCAvFpOp(i->Pin.AvBin32Fx4.op));
       ppHRegPPC(i->Pin.AvBin32Fx4.dst);
@@ -1676,7 +2020,7 @@ void ppPPCInstr ( PPCInstr* i, Bool mode64 )
 
    case Pin_AvSplat: {
       UChar sz = i->Pin.AvSplat.sz;
-      UChar ch_sz = toUChar( (sz == 8) ? 'b' : (sz == 16) ? 'h' : 'w' );
+      HChar ch_sz = toUChar( (sz == 8) ? 'b' : (sz == 16) ? 'h' : 'w' );
       vex_printf("vsplt%s%c ",
                  i->Pin.AvSplat.src->tag == Pvi_Imm ? "is" : "", ch_sz);
       ppHRegPPC(i->Pin.AvSplat.dst);
@@ -1711,6 +2055,208 @@ void ppPPCInstr ( PPCInstr* i, Bool mode64 )
       ppHRegPPC(i->Pin.AvLdVSCR.src);
       return;
 
+   case Pin_AvCipherV128Unary:
+      vex_printf("%s(w) ", showPPCAvOp(i->Pin.AvCipherV128Unary.op));
+      ppHRegPPC(i->Pin.AvCipherV128Unary.dst);
+      vex_printf(",");
+      ppHRegPPC(i->Pin.AvCipherV128Unary.src);
+      return;
+
+   case Pin_AvCipherV128Binary:
+      vex_printf("%s(w) ", showPPCAvOp(i->Pin.AvCipherV128Binary.op));
+      ppHRegPPC(i->Pin.AvCipherV128Binary.dst);
+      vex_printf(",");
+      ppHRegPPC(i->Pin.AvCipherV128Binary.srcL);
+      vex_printf(",");
+      ppHRegPPC(i->Pin.AvCipherV128Binary.srcR);
+      return;
+
+   case Pin_AvHashV128Binary:
+      vex_printf("%s(w) ", showPPCAvOp(i->Pin.AvHashV128Binary.op));
+      ppHRegPPC(i->Pin.AvHashV128Binary.dst);
+      vex_printf(",");
+      ppHRegPPC(i->Pin.AvHashV128Binary.src);
+      vex_printf(",");
+      ppPPCRI(i->Pin.AvHashV128Binary.s_field);
+      return;
+
+   case Pin_AvBCDV128Trinary:
+      vex_printf("%s(w) ", showPPCAvOp(i->Pin.AvBCDV128Trinary.op));
+      ppHRegPPC(i->Pin.AvBCDV128Trinary.dst);
+      vex_printf(",");
+      ppHRegPPC(i->Pin.AvBCDV128Trinary.src1);
+      vex_printf(",");
+      ppHRegPPC(i->Pin.AvBCDV128Trinary.src2);
+      vex_printf(",");
+      ppPPCRI(i->Pin.AvBCDV128Trinary.ps);
+      return;
+
+   case Pin_Dfp64Unary:
+      vex_printf("%s ", showPPCFpOp(i->Pin.Dfp64Unary.op));
+      ppHRegPPC(i->Pin.Dfp64Unary.dst);
+      vex_printf(",");
+      ppHRegPPC(i->Pin.Dfp64Unary.src);
+      return;
+
+   case Pin_Dfp64Binary:
+      vex_printf("%s ", showPPCFpOp(i->Pin.Dfp64Binary.op));
+      ppHRegPPC(i->Pin.Dfp64Binary.dst);
+      vex_printf(",");
+      ppHRegPPC(i->Pin.Dfp64Binary.srcL);
+      vex_printf(",");
+      ppHRegPPC(i->Pin.Dfp64Binary.srcR);
+      return;
+
+   case Pin_DfpShift:
+      vex_printf("%s ", showPPCFpOp(i->Pin.DfpShift.op));
+      ppHRegPPC(i->Pin.DfpShift.dst);
+      vex_printf(",");
+      ppHRegPPC(i->Pin.DfpShift.src);
+      vex_printf(",");
+      ppPPCRI(i->Pin.DfpShift.shift);
+      return;
+
+   case Pin_Dfp128Unary:
+      vex_printf("%s ", showPPCFpOp(i->Pin.Dfp128Unary.op));
+      ppHRegPPC(i->Pin.Dfp128Unary.dst_hi);
+      vex_printf(",");
+      ppHRegPPC(i->Pin.Dfp128Unary.src_hi);
+      return;
+
+   case Pin_Dfp128Binary:
+      vex_printf("%s ", showPPCFpOp(i->Pin.Dfp128Binary.op));
+      ppHRegPPC(i->Pin.Dfp128Binary.dst_hi);
+      vex_printf(",");
+      ppHRegPPC(i->Pin.Dfp128Binary.srcR_hi);
+      return;
+
+   case Pin_DfpShift128:
+      vex_printf("%s ", showPPCFpOp(i->Pin.DfpShift128.op));
+      ppHRegPPC(i->Pin.DfpShift128.dst_hi);
+      vex_printf(",");
+      ppHRegPPC(i->Pin.DfpShift128.src_hi);
+      vex_printf(",");
+      ppPPCRI(i->Pin.DfpShift128.shift);
+      return;
+
+   case Pin_DfpRound:
+      vex_printf("drintx ");
+      ppHRegPPC(i->Pin.DfpRound.dst);
+      vex_printf(",");
+      ppHRegPPC(i->Pin.DfpRound.src);
+      vex_printf(",");
+      ppPPCRI(i->Pin.DfpRound.r_rmc); /*  R in bit 3 and RMC in bits 2:0 */
+      return;
+
+   case Pin_DfpRound128:
+      vex_printf("drintxq ");
+      ppHRegPPC(i->Pin.DfpRound128.dst_hi);
+      vex_printf(",");
+      ppHRegPPC(i->Pin.DfpRound128.src_hi);
+      vex_printf(",");
+      ppPPCRI(i->Pin.DfpRound128.r_rmc); /*  R in bit 3 and RMC in bits 2:0 */
+      return;
+
+   case Pin_DfpQuantize:
+      vex_printf("%s ", showPPCFpOp(i->Pin.DfpQuantize.op));
+      ppHRegPPC(i->Pin.DfpQuantize.dst);
+      vex_printf(",");
+      ppHRegPPC(i->Pin.DfpQuantize.srcL);
+      vex_printf(",");
+      ppHRegPPC(i->Pin.DfpQuantize.srcR);
+      vex_printf(",");
+      ppPPCRI(i->Pin.DfpQuantize.rmc);
+      return;
+
+   case Pin_DfpQuantize128:
+      /*  Dst is used to pass in left source and return result */
+      vex_printf("dquaq ");
+      ppHRegPPC(i->Pin.DfpQuantize128.dst_hi);
+      vex_printf(",");
+      ppHRegPPC(i->Pin.DfpQuantize128.dst_hi);
+      vex_printf(",");
+      ppHRegPPC(i->Pin.DfpQuantize128.src_hi);
+      vex_printf(",");
+      ppPPCRI(i->Pin.DfpQuantize128.rmc);
+      return;
+
+   case Pin_DfpD128toD64:
+      vex_printf("%s ", showPPCFpOp(i->Pin.DfpD128toD64.op));
+      ppHRegPPC(i->Pin.DfpD128toD64.dst);
+      vex_printf(",");
+      ppHRegPPC(i->Pin.DfpD128toD64.src_hi);
+      vex_printf(",");
+      return;
+
+   case Pin_DfpI64StoD128:
+      vex_printf("%s ", showPPCFpOp(i->Pin.DfpI64StoD128.op));
+      ppHRegPPC(i->Pin.DfpI64StoD128.dst_hi);
+      vex_printf(",");
+      ppHRegPPC(i->Pin.DfpI64StoD128.src);
+      vex_printf(",");
+      return;
+   case Pin_ExtractExpD128:
+      vex_printf("dxexq ");
+      ppHRegPPC(i->Pin.ExtractExpD128.dst);
+      vex_printf(",");
+      ppHRegPPC(i->Pin.ExtractExpD128.src_hi);
+      return;
+   case Pin_InsertExpD128:
+      vex_printf("diexq ");
+      ppHRegPPC(i->Pin.InsertExpD128.dst_hi);
+      vex_printf(",");
+      ppHRegPPC(i->Pin.InsertExpD128.srcL);
+      vex_printf(",");
+      ppHRegPPC(i->Pin.InsertExpD128.srcR_hi);
+      return;
+   case Pin_Dfp64Cmp:
+      vex_printf("dcmpo %%cr1,");
+      ppHRegPPC(i->Pin.Dfp64Cmp.srcL);
+      vex_printf(",");
+      ppHRegPPC(i->Pin.Dfp64Cmp.srcR);
+      vex_printf("; mfcr ");
+      ppHRegPPC(i->Pin.Dfp64Cmp.dst);
+      vex_printf("; rlwinm ");
+      ppHRegPPC(i->Pin.Dfp64Cmp.dst);
+      vex_printf(",");
+      ppHRegPPC(i->Pin.Dfp64Cmp.dst);
+      vex_printf(",8,28,31");
+      return;
+   case Pin_Dfp128Cmp:
+      vex_printf("dcmpoq %%cr1,");
+      ppHRegPPC(i->Pin.Dfp128Cmp.srcL_hi);
+      vex_printf(",");
+      ppHRegPPC(i->Pin.Dfp128Cmp.srcR_hi);
+      vex_printf("; mfcr ");
+      ppHRegPPC(i->Pin.Dfp128Cmp.dst);
+      vex_printf("; rlwinm ");
+      ppHRegPPC(i->Pin.Dfp128Cmp.dst);
+      vex_printf(",");
+      ppHRegPPC(i->Pin.Dfp128Cmp.dst);
+      vex_printf(",8,28,31");
+      return;
+   case Pin_EvCheck:
+      /* Note that the counter dec is 32 bit even in 64-bit mode. */
+      vex_printf("(evCheck) ");
+      vex_printf("lwz r30,");
+      ppPPCAMode(i->Pin.EvCheck.amCounter);
+      vex_printf("; addic. r30,r30,-1; ");
+      vex_printf("stw r30,");
+      ppPPCAMode(i->Pin.EvCheck.amCounter);
+      vex_printf("; bge nofail; lwz r30,");
+      ppPPCAMode(i->Pin.EvCheck.amFailAddr);
+      vex_printf("; mtctr r30; bctr; nofail:");
+      return;
+   case Pin_ProfInc:
+      if (mode64) {
+         vex_printf("(profInc) imm64-fixed5 r30,$NotKnownYet; ");
+         vex_printf("ld r29,(r30); addi r29,r29,1; std r29,(r30)");
+      } else {
+         vex_printf("(profInc) imm32-fixed2 r30,$NotKnownYet; ");
+         vex_printf("lwz r29,4(r30); addic. r29,r29,1; stw r29,4(r30)");
+         vex_printf("lwz r29,0(r30); addze r29,r29; stw r29,0(r30)");
+      }
+      break;
    default:
       vex_printf("\nppPPCInstr: No such tag(%d)\n", (Int)i->tag);
       vpanic("ppPPCInstr");
@@ -1809,17 +2355,21 @@ void getRegUsage_PPCInstr ( HRegUsage* u, PPCInstr* i, Bool mode64 )
          and no other, as a destination temporary. */
       return;
    }
-   case Pin_Goto:
-      addRegUsage_PPCRI(u, i->Pin.Goto.dst);
-      /* GPR3 holds destination address from Pin_Goto */
-      addHRegUse(u, HRmWrite, hregPPC_GPR3(mode64));
-      if (i->Pin.Goto.jk != Ijk_Boring
-          && i->Pin.Goto.jk != Ijk_Call
-          && i->Pin.Goto.jk != Ijk_Ret)
-            /* note, this is irrelevant since the guest state pointer
-               register is not actually available to the allocator.
-               But still .. */
-         addHRegUse(u, HRmWrite, GuestStatePtr(mode64));
+   /* XDirect/XIndir/XAssisted are also a bit subtle.  They
+      conditionally exit the block.  Hence we only need to list (1)
+      the registers that they read, and (2) the registers that they
+      write in the case where the block is not exited.  (2) is empty,
+      hence only (1) is relevant here. */
+   case Pin_XDirect:
+      addRegUsage_PPCAMode(u, i->Pin.XDirect.amCIA);
+      return;
+   case Pin_XIndir:
+      addHRegUse(u, HRmRead, i->Pin.XIndir.dstGA);
+      addRegUsage_PPCAMode(u, i->Pin.XIndir.amCIA);
+      return;
+   case Pin_XAssisted:
+      addHRegUse(u, HRmRead, i->Pin.XAssisted.dstGA);
+      addRegUsage_PPCAMode(u, i->Pin.XAssisted.amCIA);
       return;
    case Pin_CMov:
       addRegUsage_PPCRI(u,  i->Pin.CMov.src);
@@ -1913,8 +2463,8 @@ void getRegUsage_PPCInstr ( HRegUsage* u, PPCInstr* i, Bool mode64 )
       return;
    case Pin_AvBinary:
       if (i->Pin.AvBinary.op == Pav_XOR
-          && i->Pin.AvBinary.dst == i->Pin.AvBinary.srcL
-          && i->Pin.AvBinary.dst == i->Pin.AvBinary.srcR) {
+          && sameHReg(i->Pin.AvBinary.dst, i->Pin.AvBinary.srcL)
+          && sameHReg(i->Pin.AvBinary.dst, i->Pin.AvBinary.srcR)) {
          /* reg-alloc needs to understand 'xor r,r,r' as a write of r */
          /* (as opposed to a rite of passage :-) */
          addHRegUse(u, HRmWrite, i->Pin.AvBinary.dst);
@@ -1938,6 +2488,11 @@ void getRegUsage_PPCInstr ( HRegUsage* u, PPCInstr* i, Bool mode64 )
       addHRegUse(u, HRmWrite, i->Pin.AvBin32x4.dst);
       addHRegUse(u, HRmRead,  i->Pin.AvBin32x4.srcL);
       addHRegUse(u, HRmRead,  i->Pin.AvBin32x4.srcR);
+      return;
+   case Pin_AvBin64x2:
+      addHRegUse(u, HRmWrite, i->Pin.AvBin64x2.dst);
+      addHRegUse(u, HRmRead,  i->Pin.AvBin64x2.srcL);
+      addHRegUse(u, HRmRead,  i->Pin.AvBin64x2.srcR);
       return;
    case Pin_AvBin32Fx4:
       addHRegUse(u, HRmWrite, i->Pin.AvBin32Fx4.dst);
@@ -1978,7 +2533,127 @@ void getRegUsage_PPCInstr ( HRegUsage* u, PPCInstr* i, Bool mode64 )
    case Pin_AvLdVSCR:
       addHRegUse(u, HRmRead, i->Pin.AvLdVSCR.src);
       return;
-
+   case Pin_AvCipherV128Unary:
+      addHRegUse(u, HRmWrite, i->Pin.AvCipherV128Unary.dst);
+      addHRegUse(u, HRmRead,  i->Pin.AvCipherV128Unary.src);
+      return;
+   case Pin_AvCipherV128Binary:
+      addHRegUse(u, HRmWrite, i->Pin.AvCipherV128Binary.dst);
+      addHRegUse(u, HRmRead,  i->Pin.AvCipherV128Binary.srcL);
+      addHRegUse(u, HRmRead,  i->Pin.AvCipherV128Binary.srcR);
+      return;
+   case Pin_AvHashV128Binary:
+      addHRegUse(u, HRmWrite, i->Pin.AvHashV128Binary.dst);
+      addHRegUse(u, HRmRead,  i->Pin.AvHashV128Binary.src);
+      addRegUsage_PPCRI(u,    i->Pin.AvHashV128Binary.s_field);
+      return;
+   case Pin_AvBCDV128Trinary:
+      addHRegUse(u, HRmWrite, i->Pin.AvBCDV128Trinary.dst);
+      addHRegUse(u, HRmRead,  i->Pin.AvBCDV128Trinary.src1);
+      addHRegUse(u, HRmRead,  i->Pin.AvBCDV128Trinary.src2);
+      addRegUsage_PPCRI(u,    i->Pin.AvBCDV128Trinary.ps);
+      return;
+   case Pin_Dfp64Unary:
+      addHRegUse(u, HRmWrite, i->Pin.Dfp64Unary.dst);
+      addHRegUse(u, HRmRead, i->Pin.Dfp64Unary.src);
+      return;
+   case Pin_Dfp64Binary:
+      addHRegUse(u, HRmWrite, i->Pin.Dfp64Binary.dst);
+      addHRegUse(u, HRmRead, i->Pin.Dfp64Binary.srcL);
+      addHRegUse(u, HRmRead, i->Pin.Dfp64Binary.srcR);
+      return;
+   case Pin_DfpShift:
+      addRegUsage_PPCRI(u,    i->Pin.DfpShift.shift);
+      addHRegUse(u, HRmWrite, i->Pin.DfpShift.src);
+      addHRegUse(u, HRmWrite, i->Pin.DfpShift.dst);
+      return;
+   case Pin_Dfp128Unary:
+      addHRegUse(u, HRmWrite, i->Pin.Dfp128Unary.dst_hi);
+      addHRegUse(u, HRmWrite, i->Pin.Dfp128Unary.dst_lo);
+      addHRegUse(u, HRmRead,  i->Pin.Dfp128Unary.src_hi);
+      addHRegUse(u, HRmRead,  i->Pin.Dfp128Unary.src_lo);
+      return;
+   case Pin_Dfp128Binary:
+      addHRegUse(u, HRmWrite, i->Pin.Dfp128Binary.dst_hi);
+      addHRegUse(u, HRmWrite, i->Pin.Dfp128Binary.dst_lo);
+      addHRegUse(u, HRmRead, i->Pin.Dfp128Binary.srcR_hi);
+      addHRegUse(u, HRmRead, i->Pin.Dfp128Binary.srcR_lo);
+      return;
+   case Pin_DfpRound:
+      addHRegUse(u, HRmWrite, i->Pin.DfpRound.dst);
+      addHRegUse(u, HRmRead,  i->Pin.DfpRound.src);
+      return;
+   case Pin_DfpRound128:
+      addHRegUse(u, HRmWrite, i->Pin.DfpRound128.dst_hi);
+      addHRegUse(u, HRmWrite, i->Pin.DfpRound128.dst_lo);
+      addHRegUse(u, HRmRead,  i->Pin.DfpRound128.src_hi);
+      addHRegUse(u, HRmRead,  i->Pin.DfpRound128.src_lo);
+      return;
+   case Pin_DfpQuantize:
+      addRegUsage_PPCRI(u,  i->Pin.DfpQuantize.rmc);
+      addHRegUse(u, HRmWrite, i->Pin.DfpQuantize.dst);
+      addHRegUse(u, HRmRead,  i->Pin.DfpQuantize.srcL);
+      addHRegUse(u, HRmRead,  i->Pin.DfpQuantize.srcR);
+      return;
+   case Pin_DfpQuantize128:
+      addHRegUse(u, HRmWrite, i->Pin.DfpQuantize128.dst_hi);
+      addHRegUse(u, HRmWrite, i->Pin.DfpQuantize128.dst_lo);
+      addHRegUse(u, HRmRead,  i->Pin.DfpQuantize128.src_hi);
+      addHRegUse(u, HRmRead,  i->Pin.DfpQuantize128.src_lo);
+      return;
+   case Pin_DfpShift128:
+      addRegUsage_PPCRI(u,    i->Pin.DfpShift128.shift);
+      addHRegUse(u, HRmWrite, i->Pin.DfpShift128.src_hi);
+      addHRegUse(u, HRmWrite, i->Pin.DfpShift128.src_lo);
+      addHRegUse(u, HRmWrite, i->Pin.DfpShift128.dst_hi);
+      addHRegUse(u, HRmWrite, i->Pin.DfpShift128.dst_lo);
+      return;
+   case Pin_DfpD128toD64:
+      addHRegUse(u, HRmWrite, i->Pin.DfpD128toD64.src_hi);
+      addHRegUse(u, HRmWrite, i->Pin.DfpD128toD64.src_lo);
+      addHRegUse(u, HRmWrite, i->Pin.DfpD128toD64.dst);
+      return;
+   case Pin_DfpI64StoD128:
+      addHRegUse(u, HRmWrite, i->Pin.DfpI64StoD128.src);
+      addHRegUse(u, HRmWrite, i->Pin.DfpI64StoD128.dst_hi);
+      addHRegUse(u, HRmWrite, i->Pin.DfpI64StoD128.dst_lo);
+      return;
+   case Pin_ExtractExpD128:
+      addHRegUse(u, HRmWrite, i->Pin.ExtractExpD128.dst);
+      addHRegUse(u, HRmRead,  i->Pin.ExtractExpD128.src_hi);
+      addHRegUse(u, HRmRead,  i->Pin.ExtractExpD128.src_lo);
+      return;
+   case Pin_InsertExpD128:
+      addHRegUse(u, HRmWrite, i->Pin.InsertExpD128.dst_hi);
+      addHRegUse(u, HRmWrite, i->Pin.InsertExpD128.dst_lo);
+      addHRegUse(u, HRmRead,  i->Pin.InsertExpD128.srcL);
+      addHRegUse(u, HRmRead,  i->Pin.InsertExpD128.srcR_hi);
+      addHRegUse(u, HRmRead,  i->Pin.InsertExpD128.srcR_lo);
+      return;
+   case Pin_Dfp64Cmp:
+      addHRegUse(u, HRmWrite, i->Pin.Dfp64Cmp.dst);
+      addHRegUse(u, HRmRead,  i->Pin.Dfp64Cmp.srcL);
+      addHRegUse(u, HRmRead,  i->Pin.Dfp64Cmp.srcR);
+      return;
+   case Pin_Dfp128Cmp:
+      addHRegUse(u, HRmWrite, i->Pin.Dfp128Cmp.dst);
+      addHRegUse(u, HRmRead,  i->Pin.Dfp128Cmp.srcL_hi);
+      addHRegUse(u, HRmRead,  i->Pin.Dfp128Cmp.srcL_lo);
+      addHRegUse(u, HRmRead,  i->Pin.Dfp128Cmp.srcR_hi);
+      addHRegUse(u, HRmRead,  i->Pin.Dfp128Cmp.srcR_lo);
+      return;                                           
+   case Pin_EvCheck:
+      /* We expect both amodes only to mention the GSP (r31), so this
+         is in fact pointless, since GSP isn't allocatable, but
+         anyway.. */
+      addRegUsage_PPCAMode(u, i->Pin.EvCheck.amCounter);
+      addRegUsage_PPCAMode(u, i->Pin.EvCheck.amFailAddr);
+      addHRegUse(u, HRmWrite, hregPPC_GPR30(mode64)); /* also unavail to RA */
+      return;
+   case Pin_ProfInc:
+      addHRegUse(u, HRmWrite, hregPPC_GPR29(mode64));
+      addHRegUse(u, HRmWrite, hregPPC_GPR30(mode64));
+      return;
    default:
       ppPPCInstr(i, mode64);
       vpanic("getRegUsage_PPCInstr");
@@ -2032,8 +2707,16 @@ void mapRegs_PPCInstr ( HRegRemap* m, PPCInstr* i, Bool mode64 )
       return;
    case Pin_Call:
       return;
-   case Pin_Goto:
-      mapRegs_PPCRI(m, i->Pin.Goto.dst);
+   case Pin_XDirect:
+      mapRegs_PPCAMode(m, i->Pin.XDirect.amCIA);
+      return;
+   case Pin_XIndir:
+      mapReg(m, &i->Pin.XIndir.dstGA);
+      mapRegs_PPCAMode(m, i->Pin.XIndir.amCIA);
+      return;
+   case Pin_XAssisted:
+      mapReg(m, &i->Pin.XAssisted.dstGA);
+      mapRegs_PPCAMode(m, i->Pin.XAssisted.amCIA);
       return;
    case Pin_CMov:
       mapRegs_PPCRI(m, i->Pin.CMov.src);
@@ -2137,6 +2820,11 @@ void mapRegs_PPCInstr ( HRegRemap* m, PPCInstr* i, Bool mode64 )
       mapReg(m, &i->Pin.AvBin32x4.srcL);
       mapReg(m, &i->Pin.AvBin32x4.srcR);
       return;
+   case Pin_AvBin64x2:
+      mapReg(m, &i->Pin.AvBin64x2.dst);
+      mapReg(m, &i->Pin.AvBin64x2.srcL);
+      mapReg(m, &i->Pin.AvBin64x2.srcR);
+      return;
    case Pin_AvBin32Fx4:
       mapReg(m, &i->Pin.AvBin32Fx4.dst);
       mapReg(m, &i->Pin.AvBin32Fx4.srcL);
@@ -2174,7 +2862,126 @@ void mapRegs_PPCInstr ( HRegRemap* m, PPCInstr* i, Bool mode64 )
    case Pin_AvLdVSCR:
       mapReg(m, &i->Pin.AvLdVSCR.src);
       return;
-
+   case Pin_AvCipherV128Unary:
+      mapReg(m, &i->Pin.AvCipherV128Unary.dst);
+      mapReg(m, &i->Pin.AvCipherV128Unary.src);
+      return;
+   case Pin_AvCipherV128Binary:
+      mapReg(m, &i->Pin.AvCipherV128Binary.dst);
+      mapReg(m, &i->Pin.AvCipherV128Binary.srcL);
+      mapReg(m, &i->Pin.AvCipherV128Binary.srcR);
+      return;
+   case Pin_AvHashV128Binary:
+      mapRegs_PPCRI(m, i->Pin.AvHashV128Binary.s_field);
+      mapReg(m, &i->Pin.AvHashV128Binary.dst);
+      mapReg(m, &i->Pin.AvHashV128Binary.src);
+      return;
+   case Pin_AvBCDV128Trinary:
+      mapReg(m, &i->Pin.AvBCDV128Trinary.dst);
+      mapReg(m, &i->Pin.AvBCDV128Trinary.src1);
+      mapReg(m, &i->Pin.AvBCDV128Trinary.src2);
+      mapRegs_PPCRI(m, i->Pin.AvBCDV128Trinary.ps);
+      return;
+   case Pin_Dfp64Unary:
+      mapReg(m, &i->Pin.Dfp64Unary.dst);
+      mapReg(m, &i->Pin.Dfp64Unary.src);
+      return;
+   case Pin_Dfp64Binary:
+      mapReg(m, &i->Pin.Dfp64Binary.dst);
+      mapReg(m, &i->Pin.Dfp64Binary.srcL);
+      mapReg(m, &i->Pin.Dfp64Binary.srcR);
+      return;
+   case Pin_DfpShift:
+      mapRegs_PPCRI(m, i->Pin.DfpShift.shift);
+      mapReg(m, &i->Pin.DfpShift.src);
+      mapReg(m, &i->Pin.DfpShift.dst);
+      return;
+   case Pin_Dfp128Unary:
+      mapReg(m, &i->Pin.Dfp128Unary.dst_hi);
+      mapReg(m, &i->Pin.Dfp128Unary.dst_lo);
+      mapReg(m, &i->Pin.Dfp128Unary.src_hi);
+      mapReg(m, &i->Pin.Dfp128Unary.src_lo);
+     return;
+   case Pin_Dfp128Binary:
+      mapReg(m, &i->Pin.Dfp128Binary.dst_hi);
+      mapReg(m, &i->Pin.Dfp128Binary.dst_lo);
+      mapReg(m, &i->Pin.Dfp128Binary.srcR_hi);
+      mapReg(m, &i->Pin.Dfp128Binary.srcR_lo);
+      return;
+   case Pin_DfpShift128:
+      mapRegs_PPCRI(m, i->Pin.DfpShift128.shift);
+      mapReg(m, &i->Pin.DfpShift128.src_hi);
+      mapReg(m, &i->Pin.DfpShift128.src_lo);
+      mapReg(m, &i->Pin.DfpShift128.dst_hi);
+      mapReg(m, &i->Pin.DfpShift128.dst_lo);
+      return;
+   case Pin_DfpRound:
+      mapReg(m, &i->Pin.DfpRound.dst);
+      mapReg(m, &i->Pin.DfpRound.src);
+      return;
+   case Pin_DfpRound128:
+      mapReg(m, &i->Pin.DfpRound128.dst_hi);
+      mapReg(m, &i->Pin.DfpRound128.dst_lo);
+      mapReg(m, &i->Pin.DfpRound128.src_hi);
+      mapReg(m, &i->Pin.DfpRound128.src_lo);
+      return;
+   case Pin_DfpQuantize:
+      mapRegs_PPCRI(m, i->Pin.DfpQuantize.rmc);
+      mapReg(m, &i->Pin.DfpQuantize.dst);
+      mapReg(m, &i->Pin.DfpQuantize.srcL);
+      mapReg(m, &i->Pin.DfpQuantize.srcR);
+      return;
+   case Pin_DfpQuantize128:
+      mapRegs_PPCRI(m, i->Pin.DfpQuantize128.rmc);
+      mapReg(m, &i->Pin.DfpQuantize128.dst_hi);
+      mapReg(m, &i->Pin.DfpQuantize128.dst_lo);
+      mapReg(m, &i->Pin.DfpQuantize128.src_hi);
+      mapReg(m, &i->Pin.DfpQuantize128.src_lo);
+      return;
+   case Pin_DfpD128toD64:
+      mapReg(m, &i->Pin.DfpD128toD64.src_hi);
+      mapReg(m, &i->Pin.DfpD128toD64.src_lo);
+      mapReg(m, &i->Pin.DfpD128toD64.dst);
+      return;
+   case Pin_DfpI64StoD128:
+      mapReg(m, &i->Pin.DfpI64StoD128.src);
+      mapReg(m, &i->Pin.DfpI64StoD128.dst_hi);
+      mapReg(m, &i->Pin.DfpI64StoD128.dst_lo);
+      return;
+   case Pin_ExtractExpD128:
+      mapReg(m, &i->Pin.ExtractExpD128.dst);
+      mapReg(m, &i->Pin.ExtractExpD128.src_hi);
+      mapReg(m, &i->Pin.ExtractExpD128.src_lo);
+      return;
+   case Pin_InsertExpD128:
+      mapReg(m, &i->Pin.InsertExpD128.dst_hi);
+      mapReg(m, &i->Pin.InsertExpD128.dst_lo);
+      mapReg(m, &i->Pin.InsertExpD128.srcL);
+      mapReg(m, &i->Pin.InsertExpD128.srcR_hi);
+      mapReg(m, &i->Pin.InsertExpD128.srcR_lo);
+      return;
+   case Pin_Dfp64Cmp:
+      mapReg(m, &i->Pin.Dfp64Cmp.dst);
+      mapReg(m, &i->Pin.Dfp64Cmp.srcL);
+      mapReg(m, &i->Pin.Dfp64Cmp.srcR);
+      return;
+   case Pin_Dfp128Cmp:
+      mapReg(m, &i->Pin.Dfp128Cmp.dst);
+      mapReg(m, &i->Pin.Dfp128Cmp.srcL_hi);
+      mapReg(m, &i->Pin.Dfp128Cmp.srcL_lo);
+      mapReg(m, &i->Pin.Dfp128Cmp.srcR_hi);
+      mapReg(m, &i->Pin.Dfp128Cmp.srcR_lo);
+      return;
+   case Pin_EvCheck:
+      /* We expect both amodes only to mention the GSP (r31), so this
+         is in fact pointless, since GSP isn't allocatable, but
+         anyway.. */
+      mapRegs_PPCAMode(m, i->Pin.EvCheck.amCounter);
+      mapRegs_PPCAMode(m, i->Pin.EvCheck.amFailAddr);
+      return;
+   case Pin_ProfInc:
+      /* hardwires r29 and r30 -- nothing to modify. */
+      return;
    default:
       ppPPCInstr(i, mode64);
       vpanic("mapRegs_PPCInstr");
@@ -2194,7 +3001,7 @@ Bool isMove_PPCInstr ( PPCInstr* i, HReg* src, HReg* dst )
          return False;
       if (i->Pin.Alu.srcR->tag != Prh_Reg)
          return False;
-      if (i->Pin.Alu.srcR->Prh.Reg.reg != i->Pin.Alu.srcL)
+      if (! sameHReg(i->Pin.Alu.srcR->Prh.Reg.reg, i->Pin.Alu.srcL))
          return False;
       *src = i->Pin.Alu.srcL;
       *dst = i->Pin.Alu.dst;
@@ -2308,7 +3115,7 @@ static UInt vregNo ( HReg v )
    return n;
 }
 
-/* Emit 32bit instruction big-endianly */
+/* Emit an instruction big-endianly */
 static UChar* emit32 ( UChar* p, UInt w32 )
 {
    *p++ = toUChar((w32 >> 24) & 0x000000FF);
@@ -2316,6 +3123,17 @@ static UChar* emit32 ( UChar* p, UInt w32 )
    *p++ = toUChar((w32 >>  8) & 0x000000FF);
    *p++ = toUChar((w32)       & 0x000000FF);
    return p;
+}
+
+/* Fetch an instruction big-endianly */
+static UInt fetch32 ( UChar* p )
+{
+   UInt w32 = 0;
+   w32 |= ((0xFF & (UInt)p[0]) << 24);
+   w32 |= ((0xFF & (UInt)p[1]) << 16);
+   w32 |= ((0xFF & (UInt)p[2]) <<  8);
+   w32 |= ((0xFF & (UInt)p[3]) <<  0);
+   return w32;
 }
 
 /* The following mkForm[...] functions refer to ppc instruction forms
@@ -2423,12 +3241,12 @@ static UChar* mkFormXFX ( UChar* p, UInt r1, UInt f2, UInt opc2 )
 }
 
 // Only used by mtfsf
-static UChar* mkFormXFL ( UChar* p, UInt FM, UInt freg )
+static UChar* mkFormXFL ( UChar* p, UInt FM, UInt freg, UInt dfp_rm )
 {
    UInt theInstr;
    vassert(FM   < 0x100);
    vassert(freg < 0x20);
-   theInstr = ((63<<26) | (FM<<17) | (freg<<11) | (711<<1));
+   theInstr = ((63<<26) | (FM<<17) | (dfp_rm<<16) | (freg<<11) | (711<<1));
    return emit32(p, theInstr);
 }
 
@@ -2506,6 +3324,37 @@ static UChar* mkFormA ( UChar* p, UInt opc1, UInt r1, UInt r2,
    vassert(b0   < 0x2 );
    theInstr = ((opc1<<26) | (r1<<21) | (r2<<16) | (r3<<11) |
                (r4<<6) | (opc2<<1) | (b0));
+   return emit32(p, theInstr);
+}
+
+static UChar* mkFormZ22 ( UChar* p, UInt opc1, UInt r1, UInt r2,
+                          UInt constant, UInt opc2, UInt b0 )
+{
+   UInt theInstr;
+   vassert(opc1     < 0x40);
+   vassert(r1       < 0x20);
+   vassert(r2       < 0x20);
+   vassert(constant < 0x40);   /* 6 bit constant */
+   vassert(opc2     < 0x200);  /* 9 bit field */
+   vassert(b0       < 0x2);
+   theInstr = ((opc1<<26) | (r1<<21) | (r2<<16) |
+               (constant<<10) | (opc2<<1) | (b0));
+   return emit32(p, theInstr);
+}
+
+static UChar* mkFormZ23 ( UChar* p, UInt opc1, UInt r1, UInt r2,
+                          UInt r3, UInt rmc, UInt opc2, UInt b0 )
+{
+   UInt theInstr;
+   vassert(opc1 < 0x40);
+   vassert(r1   < 0x20);
+   vassert(r2   < 0x20);
+   vassert(r3   < 0x20);
+   vassert(rmc  < 0x4);
+   vassert(opc2 < 0x100);
+   vassert(b0   < 0x2);
+   theInstr = ((opc1<<26) | (r1<<21) | (r2<<16) |
+               (r3<<11) | (rmc<<9) | (opc2<<1) | (b0));
    return emit32(p, theInstr);
 }
 
@@ -2601,6 +3450,210 @@ static UChar* mkLoadImm ( UChar* p, UInt r_dst, ULong imm, Bool mode64 )
    return p;
 }
 
+/* A simplified version of mkLoadImm that always generates 2 or 5
+   instructions (32 or 64 bits respectively) even if it could generate
+   fewer.  This is needed for generating fixed sized patchable
+   sequences. */
+static UChar* mkLoadImm_EXACTLY2or5 ( UChar* p,
+                                      UInt r_dst, ULong imm, Bool mode64 )
+{
+   vassert(r_dst < 0x20);
+
+   if (!mode64) {
+      /* In 32-bit mode, make sure the top 32 bits of imm are a sign
+         extension of the bottom 32 bits.  (Probably unnecessary.) */
+      UInt u32 = (UInt)imm;
+      Int  s32 = (Int)u32;
+      Long s64 = (Long)s32;
+      imm = (ULong)s64;
+   }
+
+   if (!mode64) {
+      // addis r_dst,r0,(imm>>16) => lis r_dst, (imm>>16)
+      p = mkFormD(p, 15, r_dst, 0, (imm>>16) & 0xFFFF);
+      // ori r_dst, r_dst, (imm & 0xFFFF)
+      p = mkFormD(p, 24, r_dst, r_dst, imm & 0xFFFF);
+
+   } else {
+      // full 64bit immediate load: 5 (five!) insns.
+
+      // load high word
+      // lis r_dst, (imm>>48) & 0xFFFF
+      p = mkFormD(p, 15, r_dst, 0, (imm>>48) & 0xFFFF);
+
+      // ori r_dst, r_dst, (imm>>32) & 0xFFFF
+      p = mkFormD(p, 24, r_dst, r_dst, (imm>>32) & 0xFFFF);
+         
+      // shift r_dst low word to high word => rldicr
+      p = mkFormMD(p, 30, r_dst, r_dst, 32, 31, 1);
+
+      // load low word
+      // oris r_dst, r_dst, (imm>>16) & 0xFFFF
+      p = mkFormD(p, 25, r_dst, r_dst, (imm>>16) & 0xFFFF);
+
+      // ori r_dst, r_dst, (imm) & 0xFFFF
+      p = mkFormD(p, 24, r_dst, r_dst, imm & 0xFFFF);
+   }
+   return p;
+}
+
+/* Checks whether the sequence of bytes at p was indeed created
+   by mkLoadImm_EXACTLY2or5 with the given parameters. */
+static Bool isLoadImm_EXACTLY2or5 ( UChar* p_to_check,
+                                    UInt r_dst, ULong imm, Bool mode64 )
+{
+   vassert(r_dst < 0x20);
+
+   if (!mode64) {
+      /* In 32-bit mode, make sure the top 32 bits of imm are a sign
+         extension of the bottom 32 bits.  (Probably unnecessary.) */
+      UInt u32 = (UInt)imm;
+      Int  s32 = (Int)u32;
+      Long s64 = (Long)s32;
+      imm = (ULong)s64;
+   }
+
+   if (!mode64) {
+      UInt   expect[2] = { 0, 0 };
+      UChar* p         = (UChar*)&expect[0];
+      // addis r_dst,r0,(imm>>16) => lis r_dst, (imm>>16)
+      p = mkFormD(p, 15, r_dst, 0, (imm>>16) & 0xFFFF);
+      // ori r_dst, r_dst, (imm & 0xFFFF)
+      p = mkFormD(p, 24, r_dst, r_dst, imm & 0xFFFF);
+      vassert(p == (UChar*)&expect[2]);
+
+      return fetch32(p_to_check + 0) == expect[0]
+             && fetch32(p_to_check + 4) == expect[1];
+
+   } else {
+      UInt   expect[5] = { 0, 0, 0, 0, 0 };
+      UChar* p         = (UChar*)&expect[0];
+      // full 64bit immediate load: 5 (five!) insns.
+
+      // load high word
+      // lis r_dst, (imm>>48) & 0xFFFF
+      p = mkFormD(p, 15, r_dst, 0, (imm>>48) & 0xFFFF);
+
+      // ori r_dst, r_dst, (imm>>32) & 0xFFFF
+      p = mkFormD(p, 24, r_dst, r_dst, (imm>>32) & 0xFFFF);
+         
+      // shift r_dst low word to high word => rldicr
+      p = mkFormMD(p, 30, r_dst, r_dst, 32, 31, 1);
+
+      // load low word
+      // oris r_dst, r_dst, (imm>>16) & 0xFFFF
+      p = mkFormD(p, 25, r_dst, r_dst, (imm>>16) & 0xFFFF);
+
+      // ori r_dst, r_dst, (imm) & 0xFFFF
+      p = mkFormD(p, 24, r_dst, r_dst, imm & 0xFFFF);
+
+      vassert(p == (UChar*)&expect[5]);
+
+      return fetch32(p_to_check + 0) == expect[0]
+             && fetch32(p_to_check + 4) == expect[1]
+             && fetch32(p_to_check + 8) == expect[2]
+             && fetch32(p_to_check + 12) == expect[3]
+             && fetch32(p_to_check + 16) == expect[4];
+   }
+}
+
+
+/* Generate a machine-word sized load or store.  Simplified version of
+   the Pin_Load and Pin_Store cases below. */
+static UChar* do_load_or_store_machine_word ( 
+                 UChar* p, Bool isLoad,
+                 UInt reg, PPCAMode* am, Bool mode64 )
+{
+   if (isLoad) {
+      UInt opc1, sz = mode64 ? 8 : 4;
+      switch (am->tag) {
+         case Pam_IR:
+            if (mode64) {
+               vassert(0 == (am->Pam.IR.index & 3));
+            }
+            switch (sz) {
+               case 4:  opc1 = 32; vassert(!mode64); break;
+               case 8:  opc1 = 58; vassert(mode64);  break;
+               default: vassert(0);
+            }
+            p = doAMode_IR(p, opc1, reg, am, mode64);
+            break;
+         case Pam_RR:
+            /* we could handle this case, but we don't expect to ever
+               need to. */
+            vassert(0);
+         default:
+            vassert(0);
+      }
+   } else /*store*/ {
+      UInt opc1, sz = mode64 ? 8 : 4;
+      switch (am->tag) {
+         case Pam_IR:
+            if (mode64) {
+               vassert(0 == (am->Pam.IR.index & 3));
+            }
+            switch (sz) {
+               case 4:  opc1 = 36; vassert(!mode64); break;
+               case 8:  opc1 = 62; vassert(mode64);  break;
+               default: vassert(0);
+            }
+            p = doAMode_IR(p, opc1, reg, am, mode64);
+            break;
+         case Pam_RR:
+            /* we could handle this case, but we don't expect to ever
+               need to. */
+            vassert(0);
+         default:
+            vassert(0);
+      }
+   }
+   return p;
+}
+
+/* Generate a 32-bit sized load or store.  Simplified version of
+   do_load_or_store_machine_word above. */
+static UChar* do_load_or_store_word32 ( 
+                 UChar* p, Bool isLoad,
+                 UInt reg, PPCAMode* am, Bool mode64 )
+{
+   if (isLoad) {
+      UInt opc1;
+      switch (am->tag) {
+         case Pam_IR:
+            if (mode64) {
+               vassert(0 == (am->Pam.IR.index & 3));
+            }
+            opc1 = 32;
+            p = doAMode_IR(p, opc1, reg, am, mode64);
+            break;
+         case Pam_RR:
+            /* we could handle this case, but we don't expect to ever
+               need to. */
+            vassert(0);
+         default:
+            vassert(0);
+      }
+   } else /*store*/ {
+      UInt opc1;
+      switch (am->tag) {
+         case Pam_IR:
+            if (mode64) {
+               vassert(0 == (am->Pam.IR.index & 3));
+            }
+            opc1 = 36;
+            p = doAMode_IR(p, opc1, reg, am, mode64);
+            break;
+         case Pam_RR:
+            /* we could handle this case, but we don't expect to ever
+               need to. */
+            vassert(0);
+         default:
+            vassert(0);
+      }
+   }
+   return p;
+}
+
 /* Move r_dst to r_src */
 static UChar* mkMoveReg ( UChar* p, UInt r_dst, UInt r_src )
 {
@@ -2661,18 +3714,19 @@ static UChar* mkFormVA ( UChar* p, UInt opc1, UInt r1, UInt r2,
 
 /* Emit an instruction into buf and return the number of bytes used.
    Note that buf is not the insn's final place, and therefore it is
-   imperative to emit position-independent code. 
-
-   Note, dispatch should always be NULL since ppc32/64 backends
-   use a call-return scheme to get from the dispatcher to generated
-   code and back.
+   imperative to emit position-independent code.  If the emitted
+   instruction was a profiler inc, set *is_profInc to True, else leave
+   it unchanged.
 */
-Int emit_PPCInstr ( UChar* buf, Int nbuf, PPCInstr* i, 
+Int emit_PPCInstr ( /*MB_MOD*/Bool* is_profInc,
+                    UChar* buf, Int nbuf, PPCInstr* i, 
                     Bool mode64,
-                    void* dispatch_unassisted, void* dispatch_assisted )
+                    void* disp_cp_chain_me_to_slowEP,
+                    void* disp_cp_chain_me_to_fastEP,
+                    void* disp_cp_xindir,
+                    void* disp_cp_xassisted )
 {
    UChar* p = &buf[0];
-   UChar* ptmp = p;
    vassert(nbuf >= 32);
 
    if (0) {
@@ -3033,12 +4087,23 @@ Int emit_PPCInstr ( UChar* buf, Int nbuf, PPCInstr* i,
    }
 
    case Pin_Call: {
+      if (i->Pin.Call.cond.test != Pct_ALWAYS
+          && i->Pin.Call.rloc.pri != RLPri_None) {
+         /* The call might not happen (it isn't unconditional) and it
+            returns a result.  In this case we will need to generate a
+            control flow diamond to put 0x555..555 in the return
+            register(s) in the case where the call doesn't happen.  If
+            this ever becomes necessary, maybe copy code from the ARM
+            equivalent.  Until that day, just give up. */
+         goto bad;
+      }
       PPCCondCode cond  = i->Pin.Call.cond;
       UInt        r_dst = 10;
       /* As per detailed comment for Pin_Call in
          getRegUsage_PPCInstr above, %r10 is used as an address temp */
 
       /* jump over the following insns if condition does not hold */
+      UChar* ptmp = NULL;
       if (cond.test != Pct_ALWAYS) {
          /* jmp fwds if !condition */
          /* don't know how many bytes to jump over yet...
@@ -3067,75 +4132,176 @@ Int emit_PPCInstr ( UChar* buf, Int nbuf, PPCInstr* i,
       goto done;
    }
 
-   case Pin_Goto: {
-      UInt        trc   = 0;
-      UChar       r_ret = 3;        /* Put target addr into %r3 */
-      PPCCondCode cond  = i->Pin.Goto.cond;
-      UInt r_dst;
-      ULong imm_dst;
+   case Pin_XDirect: {
+      /* NB: what goes on here has to be very closely coordinated
+         with the chainXDirect_PPC and unchainXDirect_PPC below. */
+      /* We're generating chain-me requests here, so we need to be
+            sure this is actually allowed -- no-redir translations
+            can't use chain-me's.  Hence: */
+      vassert(disp_cp_chain_me_to_slowEP != NULL);
+      vassert(disp_cp_chain_me_to_fastEP != NULL);
 
-      vassert(dispatch_unassisted == NULL);
-      vassert(dispatch_assisted == NULL);
-      
-      /* First off, if this is conditional, create a conditional
-         jump over the rest of it. */
-      if (cond.test != Pct_ALWAYS) {
-         /* jmp fwds if !condition */
-         /* don't know how many bytes to jump over yet...
-            make space for a jump instruction and fill in later. */
-         ptmp = p; /* fill in this bit later */
+      /* First off, if this is conditional, create a conditional jump
+         over the rest of it.  Or at least, leave a space for it that
+         we will shortly fill in. */
+      UChar* ptmp = NULL;
+      if (i->Pin.XDirect.cond.test != Pct_ALWAYS) {
+         vassert(i->Pin.XDirect.cond.flag != Pcf_NONE);
+         ptmp = p;
          p += 4;
-      }
-
-      // cond succeeds...
-      
-      /* If a non-boring, set GuestStatePtr appropriately. */
-      switch (i->Pin.Goto.jk) {
-         case Ijk_ClientReq:   trc = VEX_TRC_JMP_CLIENTREQ;   break;
-         case Ijk_Sys_syscall: trc = VEX_TRC_JMP_SYS_SYSCALL; break;
-         case Ijk_Yield:       trc = VEX_TRC_JMP_YIELD;       break;
-         case Ijk_EmWarn:      trc = VEX_TRC_JMP_EMWARN;      break;
-         case Ijk_EmFail:      trc = VEX_TRC_JMP_EMFAIL;      break;
-         case Ijk_MapFail:     trc = VEX_TRC_JMP_MAPFAIL;     break;
-         case Ijk_NoDecode:    trc = VEX_TRC_JMP_NODECODE;    break;
-         case Ijk_TInval:      trc = VEX_TRC_JMP_TINVAL;      break;
-         case Ijk_NoRedir:     trc = VEX_TRC_JMP_NOREDIR;     break;
-         case Ijk_SigTRAP:     trc = VEX_TRC_JMP_SIGTRAP;     break;
-         case Ijk_SigBUS:      trc = VEX_TRC_JMP_SIGBUS;      break;
-         case Ijk_Ret:
-         case Ijk_Call:
-         case Ijk_Boring:
-            break;
-         default: 
-            ppIRJumpKind(i->Pin.Goto.jk);
-            vpanic("emit_PPCInstr.Pin_Goto: unknown jump kind");
-      }
-      if (trc !=0) {
-         vassert(trc < 0x10000);
-         /* addi r31,0,trc */
-         p = mkFormD(p, 14, 31, 0, trc);               // p += 4
-      }
-
-      /* Get the destination address into %r_ret */
-      if (i->Pin.Goto.dst->tag == Pri_Imm) {
-         imm_dst = i->Pin.Goto.dst->Pri.Imm;
-         p = mkLoadImm(p, r_ret, imm_dst, mode64);     // p += 4|8|20
       } else {
-         vassert(i->Pin.Goto.dst->tag == Pri_Reg);
-         r_dst = iregNo(i->Pin.Goto.dst->Pri.Reg, mode64);
-         p = mkMoveReg(p, r_ret, r_dst);               // p += 4
+         vassert(i->Pin.XDirect.cond.flag == Pcf_NONE);
       }
-      
-      /* blr */
-      p = mkFormXL(p, 19, Pct_ALWAYS, 0, 0, 16, 0);    // p += 4
+
+      /* Update the guest CIA. */
+      /* imm32/64 r30, dstGA */
+      if (!mode64) vassert(0 == (((ULong)i->Pin.XDirect.dstGA) >> 32));
+      p = mkLoadImm(p, /*r*/30, (ULong)i->Pin.XDirect.dstGA, mode64);
+      /* stw/std r30, amCIA */
+      p = do_load_or_store_machine_word(
+             p, False/*!isLoad*/,
+             /*r*/30, i->Pin.XDirect.amCIA, mode64
+          );
+
+      /* --- FIRST PATCHABLE BYTE follows --- */
+      /* VG_(disp_cp_chain_me_to_{slowEP,fastEP}) (where we're calling
+         to) backs up the return address, so as to find the address of
+         the first patchable byte.  So: don't change the number of
+         instructions (32-bit: 4, 64-bit: 7) below. */
+      /* imm32/64-fixed r30, VG_(disp_cp_chain_me_to_{slowEP,fastEP} */
+      void* disp_cp_chain_me
+               = i->Pin.XDirect.toFastEP ? disp_cp_chain_me_to_fastEP 
+                                         : disp_cp_chain_me_to_slowEP;
+      p = mkLoadImm_EXACTLY2or5(
+             p, /*r*/30, Ptr_to_ULong(disp_cp_chain_me), mode64);
+      /* mtctr r30 */
+      p = mkFormXFX(p, /*r*/30, 9, 467);
+      /* bctrl */
+      p = mkFormXL(p, 19, Pct_ALWAYS, 0, 0, 528, 1);
+      /* --- END of PATCHABLE BYTES --- */
 
       /* Fix up the conditional jump, if there was one. */
-      if (cond.test != Pct_ALWAYS) {
+      if (i->Pin.XDirect.cond.test != Pct_ALWAYS) {
          Int delta = p - ptmp;
-         vassert(delta >= 12 && delta <= 32);
+         vassert(delta >= 16 && delta <= 64 && 0 == (delta & 3));
          /* bc !ct,cf,delta */
-         mkFormB(ptmp, invertCondTest(cond.test),
-                 cond.flag, delta>>2, 0, 0);
+         mkFormB(ptmp, invertCondTest(i->Pin.XDirect.cond.test),
+                 i->Pin.XDirect.cond.flag, (delta>>2), 0, 0);
+      }
+      goto done;
+   }
+
+   case Pin_XIndir: {
+      /* We're generating transfers that could lead indirectly to a
+         chain-me, so we need to be sure this is actually allowed --
+         no-redir translations are not allowed to reach normal
+         translations without going through the scheduler.  That means
+         no XDirects or XIndirs out from no-redir translations.
+         Hence: */
+      vassert(disp_cp_xindir != NULL);
+
+      /* First off, if this is conditional, create a conditional jump
+         over the rest of it.  Or at least, leave a space for it that
+         we will shortly fill in. */
+      UChar* ptmp = NULL;
+      if (i->Pin.XIndir.cond.test != Pct_ALWAYS) {
+         vassert(i->Pin.XIndir.cond.flag != Pcf_NONE);
+         ptmp = p;
+         p += 4;
+      } else {
+         vassert(i->Pin.XIndir.cond.flag == Pcf_NONE);
+      }
+
+      /* Update the guest CIA. */
+      /* stw/std r-dstGA, amCIA */
+      p = do_load_or_store_machine_word(
+             p, False/*!isLoad*/,
+             iregNo(i->Pin.XIndir.dstGA, mode64),
+             i->Pin.XIndir.amCIA, mode64
+          );
+
+      /* imm32/64 r30, VG_(disp_cp_xindir) */
+      p = mkLoadImm(p, /*r*/30, (ULong)Ptr_to_ULong(disp_cp_xindir), mode64);
+      /* mtctr r30 */
+      p = mkFormXFX(p, /*r*/30, 9, 467);
+      /* bctr */
+      p = mkFormXL(p, 19, Pct_ALWAYS, 0, 0, 528, 0);
+
+      /* Fix up the conditional jump, if there was one. */
+      if (i->Pin.XIndir.cond.test != Pct_ALWAYS) {
+         Int delta = p - ptmp;
+         vassert(delta >= 16 && delta <= 32 && 0 == (delta & 3));
+         /* bc !ct,cf,delta */
+         mkFormB(ptmp, invertCondTest(i->Pin.XIndir.cond.test),
+                 i->Pin.XIndir.cond.flag, (delta>>2), 0, 0);
+      }
+      goto done;
+   }
+
+   case Pin_XAssisted: {
+      /* First off, if this is conditional, create a conditional jump
+         over the rest of it.  Or at least, leave a space for it that
+         we will shortly fill in. */
+      UChar* ptmp = NULL;
+      if (i->Pin.XAssisted.cond.test != Pct_ALWAYS) {
+         vassert(i->Pin.XAssisted.cond.flag != Pcf_NONE);
+         ptmp = p;
+         p += 4;
+      } else {
+         vassert(i->Pin.XAssisted.cond.flag == Pcf_NONE);
+      }
+
+      /* Update the guest CIA. */
+      /* stw/std r-dstGA, amCIA */
+      p = do_load_or_store_machine_word(
+             p, False/*!isLoad*/,
+             iregNo(i->Pin.XIndir.dstGA, mode64),
+             i->Pin.XIndir.amCIA, mode64
+          );
+
+      /* imm32/64 r31, $magic_number */
+      UInt trcval = 0;
+      switch (i->Pin.XAssisted.jk) {
+         case Ijk_ClientReq:   trcval = VEX_TRC_JMP_CLIENTREQ;   break;
+         case Ijk_Sys_syscall: trcval = VEX_TRC_JMP_SYS_SYSCALL; break;
+         //case Ijk_Sys_int128:  trcval = VEX_TRC_JMP_SYS_INT128;  break;
+         //case Ijk_Yield:       trcval = VEX_TRC_JMP_YIELD;       break;
+         case Ijk_EmWarn:      trcval = VEX_TRC_JMP_EMWARN;      break;
+         case Ijk_EmFail:      trcval = VEX_TRC_JMP_EMFAIL;      break;
+         //case Ijk_MapFail:     trcval = VEX_TRC_JMP_MAPFAIL;     break;
+         case Ijk_NoDecode:    trcval = VEX_TRC_JMP_NODECODE;    break;
+         case Ijk_TInval:      trcval = VEX_TRC_JMP_TINVAL;      break;
+         case Ijk_NoRedir:     trcval = VEX_TRC_JMP_NOREDIR;     break;
+         case Ijk_SigTRAP:     trcval = VEX_TRC_JMP_SIGTRAP;     break;
+         //case Ijk_SigSEGV:     trcval = VEX_TRC_JMP_SIGSEGV;     break;
+         case Ijk_SigBUS:        trcval = VEX_TRC_JMP_SIGBUS;    break;
+         case Ijk_Boring:      trcval = VEX_TRC_JMP_BORING;      break;
+         /* We don't expect to see the following being assisted. */
+         //case Ijk_Ret:
+         //case Ijk_Call:
+         /* fallthrough */
+         default: 
+            ppIRJumpKind(i->Pin.XAssisted.jk);
+            vpanic("emit_ARMInstr.Pin_XAssisted: unexpected jump kind");
+      }
+      vassert(trcval != 0);
+      p = mkLoadImm(p, /*r*/31, trcval, mode64);
+
+      /* imm32/64 r30, VG_(disp_cp_xassisted) */
+      p = mkLoadImm(p, /*r*/30,
+                       (ULong)Ptr_to_ULong(disp_cp_xassisted), mode64);
+      /* mtctr r30 */
+      p = mkFormXFX(p, /*r*/30, 9, 467);
+      /* bctr */
+      p = mkFormXL(p, 19, Pct_ALWAYS, 0, 0, 528, 0);
+
+      /* Fix up the conditional jump, if there was one. */
+      if (i->Pin.XAssisted.cond.test != Pct_ALWAYS) {
+         Int delta = p - ptmp;
+         vassert(delta >= 16 && delta <= 32 && 0 == (delta & 3));
+         /* bc !ct,cf,delta */
+         mkFormB(ptmp, invertCondTest(i->Pin.XAssisted.cond.test),
+                 i->Pin.XAssisted.cond.flag, (delta>>2), 0, 0);
       }
       goto done;
    }
@@ -3150,6 +4316,7 @@ Int emit_PPCInstr ( UChar* buf, Int nbuf, PPCInstr* i,
       cond = i->Pin.CMov.cond;
 
       /* branch (if cond fails) over move instrs */
+      UChar* ptmp = NULL;
       if (cond.test != Pct_ALWAYS) {
          /* don't know how many bytes to jump over yet...
             make space for a jump instruction and fill in later. */
@@ -3533,7 +4700,7 @@ Int emit_PPCInstr ( UChar* buf, Int nbuf, PPCInstr* i,
 
    case Pin_FpLdFPSCR: {
       UInt fr_src = fregNo(i->Pin.FpLdFPSCR.src);
-      p = mkFormXFL(p, 0xFF, fr_src);     // mtfsf, PPC32 p480
+      p = mkFormXFL(p, 0xFF, fr_src, i->Pin.FpLdFPSCR.dfp_rm);     // mtfsf, PPC32 p480
       goto done;
    }
 
@@ -3605,6 +4772,12 @@ Int emit_PPCInstr ( UChar* buf, Int nbuf, PPCInstr* i,
       case Pav_UNPCKL16S: opc2 =  718; break; // vupklsh
       case Pav_UNPCKHPIX: opc2 =  846; break; // vupkhpx
       case Pav_UNPCKLPIX: opc2 =  974; break; // vupklpx
+
+      case Pav_ZEROCNTBYTE: opc2 = 1794; break; // vclzb
+      case Pav_ZEROCNTHALF: opc2 = 1858; break; // vclzh
+      case Pav_ZEROCNTWORD: opc2 = 1922; break; // vclzw
+      case Pav_ZEROCNTDBL:  opc2 = 1986; break; // vclzd
+      case Pav_BITMTXXPOSE: opc2 = 1292; break; // vgbbd
       default:
          goto bad;
       }
@@ -3686,6 +4859,8 @@ Int emit_PPCInstr ( UChar* buf, Int nbuf, PPCInstr* i,
       case Pav_MRGHI:    opc2 =   12; break; // vmrghb
       case Pav_MRGLO:    opc2 =  268; break; // vmrglb
 
+      case Pav_POLYMULADD: opc2 = 1032; break; // vpmsumb
+
       default:
          goto bad;
       }
@@ -3738,6 +4913,8 @@ Int emit_PPCInstr ( UChar* buf, Int nbuf, PPCInstr* i,
       case Pav_MRGHI:   opc2 =   76; break; // vmrghh
       case Pav_MRGLO:   opc2 =  332; break; // vmrglh
 
+      case Pav_POLYMULADD: opc2 = 1224; break; // vpmsumh
+
       default:
          goto bad;
       }
@@ -3759,6 +4936,12 @@ Int emit_PPCInstr ( UChar* buf, Int nbuf, PPCInstr* i,
       case Pav_SUBU:    opc2 = 1152; break; // vsubuwm
       case Pav_QSUBU:   opc2 = 1664; break; // vsubuws
       case Pav_QSUBS:   opc2 = 1920; break; // vsubsws
+
+      case Pav_MULU:    opc2 =  137; break; // vmuluwm
+      case Pav_OMULU:   opc2 =  136; break; // vmulouw
+      case Pav_OMULS:   opc2 =  392; break; // vmulosw
+      case Pav_EMULU:   opc2 =  648; break; // vmuleuw
+      case Pav_EMULS:   opc2 =  904; break; // vmulesw
 
       case Pav_AVGU:    opc2 = 1154; break; // vavguw
       case Pav_AVGS:    opc2 = 1410; break; // vavgsw
@@ -3786,6 +4969,11 @@ Int emit_PPCInstr ( UChar* buf, Int nbuf, PPCInstr* i,
       case Pav_MRGHI:   opc2 =  140; break; // vmrghw
       case Pav_MRGLO:   opc2 =  396; break; // vmrglw
 
+      case Pav_CATODD:  opc2 = 1676; break; // vmrgow
+      case Pav_CATEVEN: opc2 = 1932; break; // vmrgew
+
+      case Pav_POLYMULADD: opc2 = 1160; break; // vpmsumw
+
       default:
          goto bad;
       }
@@ -3793,6 +4981,95 @@ Int emit_PPCInstr ( UChar* buf, Int nbuf, PPCInstr* i,
       goto done;
    }
 
+   case Pin_AvBin64x2: {
+      UInt v_dst  = vregNo(i->Pin.AvBin64x2.dst);
+      UInt v_srcL = vregNo(i->Pin.AvBin64x2.srcL);
+      UInt v_srcR = vregNo(i->Pin.AvBin64x2.srcR);
+      UInt opc2;
+      switch (i->Pin.AvBin64x2.op) {
+      case Pav_ADDU:    opc2 =  192; break; // vaddudm  vector double add
+      case Pav_SUBU:    opc2 = 1216; break; // vsubudm  vector double add
+      case Pav_MAXU:    opc2 =  194; break; // vmaxud   vector double max
+      case Pav_MAXS:    opc2 =  450; break; // vmaxsd   vector double max
+      case Pav_MINU:    opc2 =  706; break; // vminud   vector double min
+      case Pav_MINS:    opc2 =  962; break; // vminsd   vector double min
+      case Pav_CMPEQU:  opc2 =  199; break; // vcmpequd vector double compare
+      case Pav_CMPGTU:  opc2 =  711; break; // vcmpgtud vector double compare
+      case Pav_CMPGTS:  opc2 =  967; break; // vcmpgtsd vector double compare
+      case Pav_SHL:     opc2 = 1476; break; // vsld
+      case Pav_SHR:     opc2 = 1732; break; // vsrd
+      case Pav_SAR:     opc2 =  964; break; // vsrad
+      case Pav_ROTL:    opc2 =  196; break; // vrld
+      case Pav_PACKUU:  opc2 = 1102; break; // vpkudum
+      case Pav_QPACKUU: opc2 = 1230; break; // vpkudus, vpksdus (emulated)
+      case Pav_QPACKSS: opc2 = 1486; break; // vpksdsm
+      case Pav_MRGHI:   opc2 = 1614; break; // vmrghw
+      case Pav_MRGLO:   opc2 = 1742; break; // vmrglw
+      case Pav_POLYMULADD: opc2 = 1096; break; // vpmsumd
+      default:
+         goto bad;
+      }
+      p = mkFormVX( p, 4, v_dst, v_srcL, v_srcR, opc2 );
+      goto done;
+   }
+   case Pin_AvCipherV128Unary: {
+      UInt v_dst = vregNo(i->Pin.AvCipherV128Unary.dst);
+      UInt v_src = vregNo(i->Pin.AvCipherV128Unary.src);
+      UInt opc2;
+      switch (i->Pin.AvCipherV128Unary.op) {
+      case Pav_CIPHERSUBV128:   opc2 =  1480; break; // vsbox
+      default:
+         goto bad;
+      }
+      p = mkFormVX( p, 4, v_dst, v_src, 0, opc2 );
+      goto done;
+   }
+   case Pin_AvCipherV128Binary: {
+      UInt v_dst  = vregNo(i->Pin.AvCipherV128Binary.dst);
+      UInt v_srcL = vregNo(i->Pin.AvCipherV128Binary.srcL);
+      UInt v_srcR = vregNo(i->Pin.AvCipherV128Binary.srcR);
+      UInt opc2;
+      switch (i->Pin.AvCipherV128Binary.op) {
+      case Pav_CIPHERV128:     opc2 =  1288; break; // vcipher
+      case Pav_CIPHERLV128:    opc2 =  1289; break; // vcipherlast
+      case Pav_NCIPHERV128:    opc2 =  1352; break; // vncipher
+      case Pav_NCIPHERLV128:   opc2 =  1353; break; // vncipherlast
+      default:
+         goto bad;
+      }
+      p = mkFormVX( p, 4, v_dst, v_srcL, v_srcR, opc2 );
+      goto done;
+   }
+   case Pin_AvHashV128Binary: {
+      UInt v_dst = vregNo(i->Pin.AvHashV128Binary.dst);
+      UInt v_src = vregNo(i->Pin.AvHashV128Binary.src);
+      PPCRI* s_field = i->Pin.AvHashV128Binary.s_field;
+      UInt opc2;
+      switch (i->Pin.AvHashV128Binary.op) {
+      case Pav_SHA256:   opc2 =  1666; break; // vshasigmaw
+      case Pav_SHA512:   opc2 =  1730; break; // vshasigmad
+      default:
+         goto bad;
+      }
+      p = mkFormVX( p, 4, v_dst, v_src, s_field->Pri.Imm, opc2 );
+      goto done;
+   }
+   case Pin_AvBCDV128Trinary: {
+      UInt v_dst  = vregNo(i->Pin.AvBCDV128Trinary.dst);
+      UInt v_src1 = vregNo(i->Pin.AvBCDV128Trinary.src1);
+      UInt v_src2 = vregNo(i->Pin.AvBCDV128Trinary.src2);
+      PPCRI* ps   = i->Pin.AvBCDV128Trinary.ps;
+      UInt opc2;
+      switch (i->Pin.AvBCDV128Trinary.op) {
+      case Pav_BCDAdd:   opc2 =  1; break; // bcdadd
+      case Pav_BCDSub:   opc2 = 65; break; // bcdsub
+      default:
+         goto bad;
+      }
+      p = mkFormVXR( p, 4, v_dst, v_src1, v_src2,
+                     0x1, (ps->Pri.Imm << 9) | opc2 );
+      goto done;
+   }
    case Pin_AvBin32Fx4: {
       UInt v_dst  = vregNo(i->Pin.AvBin32Fx4.dst);
       UInt v_srcL = vregNo(i->Pin.AvBin32Fx4.srcL);
@@ -3950,6 +5227,532 @@ Int emit_PPCInstr ( UChar* buf, Int nbuf, PPCInstr* i,
       goto done;
    }
 
+   case Pin_Dfp64Unary: {
+      UInt fr_dst = fregNo( i->Pin.FpUnary.dst );
+      UInt fr_src = fregNo( i->Pin.FpUnary.src );
+
+      switch (i->Pin.Dfp64Unary.op) {
+      case Pfp_MOV: // fmr, PPC32 p410
+         p = mkFormX( p, 63, fr_dst, 0, fr_src, 72, 0 );
+         break;
+      case Pfp_DCTDP:   // D32 to D64
+         p = mkFormX( p, 59, fr_dst, 0, fr_src, 258, 0 );
+         break;
+      case Pfp_DRSP:    // D64 to D32
+         p = mkFormX( p, 59, fr_dst, 0, fr_src, 770, 0 );
+         break;
+      case Pfp_DCFFIX:   // I64 to D64 conversion
+         /* ONLY WORKS ON POWER7 */
+         p = mkFormX( p, 59, fr_dst, 0, fr_src, 802, 0);
+         break;
+      case Pfp_DCTFIX:   // D64 to I64 conversion
+         p = mkFormX( p, 59, fr_dst, 0, fr_src, 290, 0);
+         break;
+      case Pfp_DXEX:     // Extract exponent
+         p = mkFormX( p, 59, fr_dst, 0, fr_src, 354, 0 );
+         break;                                
+      default:
+         goto bad;
+      }
+      goto done;
+   }
+
+   case Pin_Dfp64Binary: {
+      UInt fr_dst = fregNo( i->Pin.Dfp64Binary.dst );
+      UInt fr_srcL = fregNo( i->Pin.Dfp64Binary.srcL );
+      UInt fr_srcR = fregNo( i->Pin.Dfp64Binary.srcR );
+      switch (i->Pin.Dfp64Binary.op) {
+      case Pfp_DFPADD: /* dadd, dfp add, use default RM from reg ignore mode
+                        * from the Iop instruction. */
+         p = mkFormX( p, 59, fr_dst, fr_srcL, fr_srcR, 2, 0 );
+         break;
+      case Pfp_DFPSUB: /* dsub, dfp subtract, use default RM from reg ignore
+                        * mode from the Iop instruction. */
+         p = mkFormX( p, 59, fr_dst, fr_srcL, fr_srcR, 514, 0 );
+         break;
+      case Pfp_DFPMUL: /* dmul, dfp multipy, use default RM from reg ignore
+                        * mode from the Iop instruction. */
+         p = mkFormX( p, 59, fr_dst, fr_srcL, fr_srcR, 34, 0 );
+         break;
+      case Pfp_DFPDIV: /* ddiv, dfp divide, use default RM from reg ignore
+                        * mode from the Iop instruction. */
+         p = mkFormX( p, 59, fr_dst, fr_srcL, fr_srcR, 546, 0 );
+         break;
+      case Pfp_DIEX:  /* diex, insert exponent */
+         p = mkFormX( p, 59, fr_dst, fr_srcL, fr_srcR, 866, 0 );
+         break;
+      default:
+         goto bad;
+      }
+      goto done;
+   }
+
+   case Pin_DfpShift: {
+      UInt fr_src = fregNo(i->Pin.DfpShift.src);
+      UInt fr_dst = fregNo(i->Pin.DfpShift.dst);
+      UInt shift;
+
+      shift =  i->Pin.DfpShift.shift->Pri.Imm;
+
+      switch (i->Pin.DfpShift.op) {
+      case Pfp_DSCLI:    /* dscli, DFP shift left by fr_srcR */
+         p = mkFormZ22( p, 59, fr_dst, fr_src, shift,  66, 0 );
+         break;
+      case Pfp_DSCRI:    /* dscri, DFP shift right by fr_srcR */
+         p = mkFormZ22( p, 59, fr_dst, fr_src, shift,  98, 0 );
+         break;
+      default:
+         vex_printf("ERROR: emit_PPCInstr default case\n");
+         goto bad;
+      }
+      goto done;
+   }
+
+   case Pin_ExtractExpD128: {
+      UInt fr_dst   = fregNo(i->Pin.ExtractExpD128.dst);
+      UInt fr_srcHi = fregNo(i->Pin.ExtractExpD128.src_hi);
+      UInt fr_srcLo = fregNo(i->Pin.ExtractExpD128.src_lo);
+
+      switch (i->Pin.ExtractExpD128.op) {
+      case Pfp_DXEXQ:                                                          
+         /* Setup the upper and lower registers of the source operand
+          * register pair.
+          */
+         p = mkFormX( p, 63, 12, 0, fr_srcHi, 72, 0);
+         p = mkFormX( p, 63, 13, 0, fr_srcLo, 72, 0);
+         p = mkFormX( p, 63, 10, 0, 12, 354, 0 );
+
+         /* The instruction will put the 64-bit result in
+          * register 10.
+          */
+         p = mkFormX(p, 63, fr_dst, 0, 10,  72, 0);
+         break;
+      default:
+         vex_printf("Error: emit_PPCInstr case Pin_DfpExtractExp, case inst Default\n");
+         goto bad;
+      }
+      goto done;
+   }
+   case Pin_Dfp128Unary: {
+     UInt fr_dstHi = fregNo(i->Pin.Dfp128Unary.dst_hi);
+     UInt fr_dstLo = fregNo(i->Pin.Dfp128Unary.dst_lo);
+     UInt fr_srcLo = fregNo(i->Pin.Dfp128Unary.src_lo);
+
+     /* Do instruction with 128-bit source operands in registers (10,11)       
+      * and (12,13).                                                           
+      */
+     switch (i->Pin.Dfp128Unary.op) {
+     case Pfp_DCTQPQ: // D64 to D128, srcLo holds 64 bit operand              
+        p = mkFormX( p, 63, 12, 0, fr_srcLo, 72, 0);
+
+        p = mkFormX( p, 63, 10, 0, 12, 258, 0 );
+
+        /* The instruction will put the 128-bit result in
+         * registers (10,11).  Note, the operand in the instruction only
+         * reference the first of the two registers in the pair.
+         */
+        p = mkFormX(p, 63, fr_dstHi, 0, 10,  72, 0);
+        p = mkFormX(p, 63, fr_dstLo, 0, 11,  72, 0);
+        break;
+     default:
+        vex_printf("Error: emit_PPCInstr case Pin_Dfp128Unary, case inst Default\
+\n");
+        goto bad;
+     }
+     goto done;
+   }
+
+   case Pin_Dfp128Binary: {
+      /* dst is used to supply the  left source operand and return
+       * the result.
+       */
+      UInt fr_dstHi = fregNo( i->Pin.Dfp128Binary.dst_hi );
+      UInt fr_dstLo = fregNo( i->Pin.Dfp128Binary.dst_lo );
+      UInt fr_srcRHi = fregNo( i->Pin.Dfp128Binary.srcR_hi );
+      UInt fr_srcRLo = fregNo( i->Pin.Dfp128Binary.srcR_lo );
+
+      /* Setup the upper and lower registers of the source operand
+       * register pair.
+       */
+      p = mkFormX( p, 63, 10, 0, fr_dstHi, 72, 0 );
+      p = mkFormX( p, 63, 11, 0, fr_dstLo, 72, 0 );
+      p = mkFormX( p, 63, 12, 0, fr_srcRHi, 72, 0 );
+      p = mkFormX( p, 63, 13, 0, fr_srcRLo, 72, 0 );
+
+      /* Do instruction with 128-bit source operands in registers (10,11)
+       * and (12,13).
+       */
+      switch (i->Pin.Dfp128Binary.op) {
+      case Pfp_DFPADDQ:
+         p = mkFormX( p, 63, 10, 10, 12, 2, 0 );
+         break;
+      case Pfp_DFPSUBQ:
+         p = mkFormX( p, 63, 10, 10, 12, 514, 0 );
+         break;
+      case Pfp_DFPMULQ:
+         p = mkFormX( p, 63, 10, 10, 12, 34, 0 );
+         break;
+      case Pfp_DFPDIVQ:
+         p = mkFormX( p, 63, 10, 10, 12, 546, 0 );
+         break;
+      default:
+         goto bad;
+      }
+
+      /* The instruction will put the 128-bit result in
+       * registers (10,11).  Note, the operand in the instruction only
+       * reference the first of the two registers in the pair.
+       */
+      p = mkFormX(p, 63, fr_dstHi, 0, 10,  72, 0);
+      p = mkFormX(p, 63, fr_dstLo, 0, 11,  72, 0);
+      goto done;
+   }
+
+   case Pin_DfpShift128: {
+      UInt fr_src_hi = fregNo(i->Pin.DfpShift128.src_hi);
+      UInt fr_src_lo = fregNo(i->Pin.DfpShift128.src_lo);
+      UInt fr_dst_hi = fregNo(i->Pin.DfpShift128.dst_hi);
+      UInt fr_dst_lo = fregNo(i->Pin.DfpShift128.dst_lo);
+      UInt shift;
+
+      shift =  i->Pin.DfpShift128.shift->Pri.Imm;
+
+      /* setup source operand in register 12, 13 pair */
+      p = mkFormX(p, 63, 12, 0, fr_src_hi, 72, 0);
+      p = mkFormX(p, 63, 13, 0, fr_src_lo, 72, 0);
+
+      /* execute instruction putting result in register 10, 11 pair */
+      switch (i->Pin.DfpShift128.op) {
+      case Pfp_DSCLIQ:    /* dscliq, DFP shift left, fr_srcR is the integer
+                           * shift amount.
+                           */
+         p = mkFormZ22( p, 63, 10, 12, shift,  66, 0 );
+         break;
+      case Pfp_DSCRIQ:    /* dscriq, DFP shift right, fr_srcR is the integer
+                           * shift amount.
+                           */
+         p = mkFormZ22( p, 63, 10, 12, shift,  98, 0 );
+         break;
+      default:
+         vex_printf("ERROR: emit_PPCInstr quad default case %d \n",
+                    i->Pin.DfpShift128.op);
+         goto bad;
+      }
+
+      /* The instruction put the 128-bit result in registers (10,11). 
+       * Note, the operand in the instruction only reference the first of 
+       * the two registers in the pair.
+       */
+      p = mkFormX(p, 63, fr_dst_hi, 0, 10,  72, 0);
+      p = mkFormX(p, 63, fr_dst_lo, 0, 11,  72, 0);
+      goto done;
+   }
+
+   case Pin_DfpRound: {
+      UInt fr_dst = fregNo(i->Pin.DfpRound.dst);
+      UInt fr_src = fregNo(i->Pin.DfpRound.src);
+      UInt r_rmc, r, rmc;
+
+      r_rmc =  i->Pin.DfpRound.r_rmc->Pri.Imm;
+      r = (r_rmc & 0x8) >> 3;
+      rmc = r_rmc & 0x3;
+
+      // drintx
+      p = mkFormZ23(p, 59, fr_dst, r, fr_src, rmc, 99, 0);
+      goto done;
+   }
+
+   case Pin_DfpRound128: {
+      UInt fr_dstHi = fregNo(i->Pin.DfpRound128.dst_hi);
+      UInt fr_dstLo = fregNo(i->Pin.DfpRound128.dst_lo);
+      UInt fr_srcHi = fregNo(i->Pin.DfpRound128.src_hi);
+      UInt fr_srcLo = fregNo(i->Pin.DfpRound128.src_lo);
+      UInt r_rmc, r, rmc;
+
+      r_rmc =  i->Pin.DfpRound128.r_rmc->Pri.Imm;
+      r = (r_rmc & 0x8) >> 3;
+      rmc = r_rmc & 0x3;
+
+      /* Setup the upper and lower registers of the source operand 
+       * register pair.
+       */
+      p = mkFormX(p, 63, 12, 0, fr_srcHi, 72, 0);
+      p = mkFormX(p, 63, 13, 0, fr_srcLo, 72, 0);
+
+      /* Do drintx instruction with 128-bit source operands in 
+       * registers (12,13).  
+       */
+      p = mkFormZ23(p, 63, 10, r, 12, rmc, 99, 0);
+
+      /* The instruction will put the 128-bit result in 
+       * registers (10,11).  Note, the operand in the instruction only 
+       * reference the first of the two registers in the pair.
+       */
+      p = mkFormX(p, 63, fr_dstHi, 0, 10,  72, 0);
+      p = mkFormX(p, 63, fr_dstLo, 0, 11,  72, 0);
+      goto done;
+   }
+
+   case Pin_DfpQuantize: {
+      UInt fr_dst  = fregNo(i->Pin.DfpQuantize.dst);
+      UInt fr_srcL = fregNo(i->Pin.DfpQuantize.srcL);
+      UInt fr_srcR = fregNo(i->Pin.DfpQuantize.srcR);
+      UInt rmc;
+
+      rmc =  i->Pin.DfpQuantize.rmc->Pri.Imm;
+
+      switch (i->Pin.DfpQuantize.op) {
+      case Pfp_DQUA:
+         p = mkFormZ23(p, 59, fr_dst, fr_srcL, fr_srcR, rmc, 3, 0);
+         break;
+      case Pfp_RRDTR:
+         p = mkFormZ23(p, 59, fr_dst, fr_srcL, fr_srcR, rmc, 35, 0);
+         break;
+      default:
+         break;
+      }
+      goto done;
+   }
+
+   case Pin_DfpQuantize128: {
+      UInt fr_dst_hi = fregNo(i->Pin.DfpQuantize128.dst_hi);
+      UInt fr_dst_lo = fregNo(i->Pin.DfpQuantize128.dst_lo);
+      UInt fr_src_hi = fregNo(i->Pin.DfpQuantize128.src_hi);
+      UInt fr_src_lo = fregNo(i->Pin.DfpQuantize128.src_lo);
+      UInt rmc;
+
+      rmc =  i->Pin.DfpQuantize128.rmc->Pri.Imm;
+      /* Setup the upper and lower registers of the source operand 
+       * register pairs.  Note, left source operand passed in via the
+       * dst register pair.
+       */
+      p = mkFormX(p, 63, 10, 0, fr_dst_hi, 72, 0);
+      p = mkFormX(p, 63, 11, 0, fr_dst_lo, 72, 0);
+      p = mkFormX(p, 63, 12, 0, fr_src_hi, 72, 0);
+      p = mkFormX(p, 63, 13, 0, fr_src_lo, 72, 0);
+
+      /* Do dquaq instruction with 128-bit source operands in 
+       * registers (12,13).  
+       */
+      switch (i->Pin.DfpQuantize128.op) {
+      case Pfp_DQUAQ:
+         p = mkFormZ23(p, 63, 10, 10, 12, rmc, 3, 0);
+         break;
+      case Pfp_DRRNDQ:
+         p = mkFormZ23(p, 63, 10, 10, 12, rmc, 35, 0);
+         break;
+      default:
+         vpanic("Pin_DfpQuantize128: default case, couldn't find inst to issue \n");
+         break;
+      }
+
+      /* The instruction will put the 128-bit result in 
+       * registers (10,11).  Note, the operand in the instruction only 
+       * reference the first of the two registers in the pair.
+       */
+      p = mkFormX(p, 63, fr_dst_hi, 0, 10,  72, 0);
+      p = mkFormX(p, 63, fr_dst_lo, 0, 11,  72, 0);
+      goto done;
+   }
+
+   case Pin_DfpD128toD64: {
+      UInt fr_dst   = fregNo( i->Pin.DfpD128toD64.dst );
+      UInt fr_srcHi = fregNo( i->Pin.DfpD128toD64.src_hi );
+      UInt fr_srcLo = fregNo( i->Pin.DfpD128toD64.src_lo );
+
+      /* Setup the upper and lower registers of the source operand
+       * register pair.
+       */
+      p = mkFormX( p, 63, 10, 0, fr_dst, 72, 0 );
+      p = mkFormX( p, 63, 12, 0, fr_srcHi, 72, 0 );
+      p = mkFormX( p, 63, 13, 0, fr_srcLo, 72, 0 );
+
+      /* Do instruction with 128-bit source operands in registers (10,11) */
+      switch (i->Pin.Dfp128Binary.op) {
+      case Pfp_DRDPQ:
+         p = mkFormX( p, 63, 10, 0, 12, 770, 0 );
+         break;
+      case Pfp_DCTFIXQ:
+         p = mkFormX( p, 63, 10, 0, 12, 290, 0 );
+         break;
+      default:
+         goto bad;
+      }
+
+      /* The instruction will put the 64-bit result in registers 10. */
+      p = mkFormX(p, 63, fr_dst, 0, 10,  72, 0);
+      goto done;
+   }
+
+   case Pin_DfpI64StoD128: {
+      UInt fr_dstHi = fregNo( i->Pin.DfpI64StoD128.dst_hi );
+      UInt fr_dstLo = fregNo( i->Pin.DfpI64StoD128.dst_lo );
+      UInt fr_src   = fregNo( i->Pin.DfpI64StoD128.src );
+
+      switch (i->Pin.Dfp128Binary.op) {
+      case Pfp_DCFFIXQ:
+         p = mkFormX( p, 63, 10, 11, fr_src, 802, 0 );
+         break;
+      default:
+         goto bad;
+      }
+
+      /* The instruction will put the 64-bit result in registers 10, 11. */
+      p = mkFormX(p, 63, fr_dstHi, 0, 10,  72, 0);
+      p = mkFormX(p, 63, fr_dstLo, 0, 11,  72, 0);
+      goto done;
+   }
+
+   case Pin_InsertExpD128: {
+      UInt fr_dstHi  = fregNo(i->Pin.InsertExpD128.dst_hi);
+      UInt fr_dstLo  = fregNo(i->Pin.InsertExpD128.dst_lo);
+      UInt fr_srcL   = fregNo(i->Pin.InsertExpD128.srcL);
+      UInt fr_srcRHi = fregNo(i->Pin.InsertExpD128.srcR_hi);
+      UInt fr_srcRLo = fregNo(i->Pin.InsertExpD128.srcR_lo);
+
+      /* The left operand is a single F64 value, the right is an F128
+       * register pair.
+       */
+      p = mkFormX(p, 63, 10, 0, fr_srcL, 72, 0);
+      p = mkFormX(p, 63, 12, 0, fr_srcRHi, 72, 0);
+      p = mkFormX(p, 63, 13, 0, fr_srcRLo, 72, 0);
+      p = mkFormX(p, 63, 10, 10, 12, 866, 0 );
+
+      /* The instruction will put the 128-bit result into
+       * registers (10,11).  Note, the operand in the instruction only
+       * reference the first of the two registers in the pair.
+       */
+      p = mkFormX(p, 63, fr_dstHi, 0, 10,  72, 0);
+      p = mkFormX(p, 63, fr_dstLo, 0, 11,  72, 0);
+      goto done;
+   }                                                                           
+
+   case Pin_Dfp64Cmp:{
+      UChar crfD    = 1;
+      UInt  r_dst   = iregNo(i->Pin.Dfp64Cmp.dst, mode64);
+      UInt  fr_srcL = fregNo(i->Pin.Dfp64Cmp.srcL);
+      UInt  fr_srcR = fregNo(i->Pin.Dfp64Cmp.srcR);
+      vassert(crfD < 8);
+      // dcmpo, dcmpu
+      p = mkFormX(p, 59, crfD<<2, fr_srcL, fr_srcR, 130, 0);
+
+      // mfcr (mv CR to r_dst)
+      p = mkFormX(p, 31, r_dst, 0, 0, 19, 0);
+
+      // rlwinm r_dst,r_dst,8,28,31
+      //  => rotate field 1 to bottomw of word, masking out upper 28
+      p = mkFormM(p, 21, r_dst, r_dst, 8, 28, 31, 0);
+      goto done;
+   }
+
+   case Pin_Dfp128Cmp: {
+      UChar crfD       = 1;
+      UInt  r_dst      = iregNo(i->Pin.Dfp128Cmp.dst, mode64);
+      UInt  fr_srcL_hi = fregNo(i->Pin.Dfp128Cmp.srcL_hi);
+      UInt  fr_srcL_lo = fregNo(i->Pin.Dfp128Cmp.srcL_lo);
+      UInt  fr_srcR_hi = fregNo(i->Pin.Dfp128Cmp.srcR_hi);
+      UInt  fr_srcR_lo = fregNo(i->Pin.Dfp128Cmp.srcR_lo);
+      vassert(crfD < 8);
+      // dcmpoq, dcmpuq
+      /* Setup the upper and lower registers of the source operand
+       * register pair.
+       */
+      p = mkFormX(p, 63, 10, 0, fr_srcL_hi, 72, 0);
+      p = mkFormX(p, 63, 11, 0, fr_srcL_lo, 72, 0);
+      p = mkFormX(p, 63, 12, 0, fr_srcR_hi, 72, 0);
+      p = mkFormX(p, 63, 13, 0, fr_srcR_lo, 72, 0);
+
+      p = mkFormX(p, 63, crfD<<2, 10, 12, 130, 0);
+
+      // mfcr (mv CR to r_dst)
+      p = mkFormX(p, 31, r_dst, 0, 0, 19, 0);
+
+      // rlwinm r_dst,r_dst,8,28,31
+      //  => rotate field 1 to bottomw of word, masking out upper 28
+      p = mkFormM(p, 21, r_dst, r_dst, 8, 28, 31, 0);
+      goto done;
+   }
+
+   case Pin_EvCheck: {
+      /* This requires a 32-bit dec/test in both 32- and 64-bit
+         modes. */
+      /* We generate:
+            lwz     r30, amCounter
+            addic.  r30, r30, -1
+            stw     r30, amCounter
+            bge     nofail
+            lwz/ld  r30, amFailAddr
+            mtctr   r30
+            bctr
+           nofail:
+      */
+      UChar* p0 = p;
+      /* lwz r30, amCounter */
+      p = do_load_or_store_word32(p, True/*isLoad*/, /*r*/30,
+                                  i->Pin.EvCheck.amCounter, mode64);
+      /* addic. r30,r30,-1 */
+      p = emit32(p, 0x37DEFFFF);
+      /* stw r30, amCounter */
+      p = do_load_or_store_word32(p, False/*!isLoad*/, /*r*/30,
+                                  i->Pin.EvCheck.amCounter, mode64);
+      /* bge nofail */
+      p = emit32(p, 0x40800010);
+      /* lwz/ld r30, amFailAddr */
+      p = do_load_or_store_machine_word(p, True/*isLoad*/, /*r*/30,
+                                        i->Pin.EvCheck.amFailAddr, mode64);
+      /* mtctr r30 */
+      p = mkFormXFX(p, /*r*/30, 9, 467);
+      /* bctr */
+      p = mkFormXL(p, 19, Pct_ALWAYS, 0, 0, 528, 0);
+      /* nofail: */
+
+      /* Crosscheck */
+      vassert(evCheckSzB_PPC() == (UChar*)p - (UChar*)p0);
+      goto done;
+   }
+
+   case Pin_ProfInc: {
+      /* We generate:
+               (ctrP is unknown now, so use 0x65556555(65556555) in the
+               expectation that a later call to LibVEX_patchProfCtr
+               will be used to fill in the immediate fields once the
+               right value is known.)
+            32-bit:
+              imm32-exactly r30, 0x65556555
+              lwz     r29, 4(r30)
+              addic.  r29, r29, 1
+              stw     r29, 4(r30)
+              lwz     r29, 0(r30)
+              addze   r29, r29
+              stw     r29, 0(r30)
+            64-bit:
+              imm64-exactly r30, 0x6555655565556555
+              ld      r29, 0(r30)
+              addi    r29, r29, 1
+              std     r29, 0(r30)
+      */
+      if (mode64) {
+         p = mkLoadImm_EXACTLY2or5(
+                p, /*r*/30, 0x6555655565556555ULL, True/*mode64*/);
+         p = emit32(p, 0xEBBE0000);
+         p = emit32(p, 0x3BBD0001);
+         p = emit32(p, 0xFBBE0000);
+      } else {
+         p = mkLoadImm_EXACTLY2or5(
+                p, /*r*/30, 0x65556555ULL, False/*!mode64*/);
+         p = emit32(p, 0x83BE0004);
+         p = emit32(p, 0x37BD0001);
+         p = emit32(p, 0x93BE0004);
+         p = emit32(p, 0x83BE0000);
+         p = emit32(p, 0x7FBD0194);
+         p = emit32(p, 0x93BE0000);
+      }
+      /* Tell the caller .. */
+      vassert(!(*is_profInc));
+      *is_profInc = True;
+      goto done;
+   }
+
    default: 
       goto bad;
    }
@@ -3961,9 +5764,150 @@ Int emit_PPCInstr ( UChar* buf, Int nbuf, PPCInstr* i,
    /*NOTREACHED*/
    
   done:
-   vassert(p - &buf[0] <= 32);
+   vassert(p - &buf[0] <= 64);
    return p - &buf[0];
 }
+
+
+/* How big is an event check?  See case for Pin_EvCheck in
+   emit_PPCInstr just above.  That crosschecks what this returns, so
+   we can tell if we're inconsistent. */
+Int evCheckSzB_PPC ( void )
+{
+  return 28;
+}
+
+
+/* NB: what goes on here has to be very closely coordinated with the
+   emitInstr case for XDirect, above. */
+VexInvalRange chainXDirect_PPC ( void* place_to_chain,
+                                 void* disp_cp_chain_me_EXPECTED,
+                                 void* place_to_jump_to,
+                                 Bool  mode64 )
+{
+   /* What we're expecting to see is:
+        imm32/64-fixed r30, disp_cp_chain_me_to_EXPECTED
+        mtctr r30
+        bctrl
+      viz
+        <8 or 20 bytes generated by mkLoadImm_EXACTLY2or5>
+        7F C9 03 A6
+        4E 80 04 21
+   */
+   UChar* p = (UChar*)place_to_chain;
+   vassert(0 == (3 & (HWord)p));
+   vassert(isLoadImm_EXACTLY2or5(p, /*r*/30,
+                                 Ptr_to_ULong(disp_cp_chain_me_EXPECTED),
+                                 mode64));
+   vassert(fetch32(p + (mode64 ? 20 : 8) + 0) == 0x7FC903A6);
+   vassert(fetch32(p + (mode64 ? 20 : 8) + 4) == 0x4E800421);
+   /* And what we want to change it to is:
+        imm32/64-fixed r30, place_to_jump_to
+        mtctr r30
+        bctr
+      viz
+        <8 or 20 bytes generated by mkLoadImm_EXACTLY2or5>
+        7F C9 03 A6
+        4E 80 04 20
+      The replacement has the same length as the original.
+   */
+   p = mkLoadImm_EXACTLY2or5(p, /*r*/30,
+                             Ptr_to_ULong(place_to_jump_to), mode64);
+   p = emit32(p, 0x7FC903A6);
+   p = emit32(p, 0x4E800420);
+
+   Int len = p - (UChar*)place_to_chain;
+   vassert(len == (mode64 ? 28 : 16)); /* stay sane */
+   VexInvalRange vir = {(HWord)place_to_chain, len};
+   return vir;
+}
+
+
+/* NB: what goes on here has to be very closely coordinated with the
+   emitInstr case for XDirect, above. */
+VexInvalRange unchainXDirect_PPC ( void* place_to_unchain,
+                                   void* place_to_jump_to_EXPECTED,
+                                   void* disp_cp_chain_me,
+                                   Bool  mode64 )
+{
+   /* What we're expecting to see is:
+        imm32/64-fixed r30, place_to_jump_to_EXPECTED
+        mtctr r30
+        bctr
+      viz
+        <8 or 20 bytes generated by mkLoadImm_EXACTLY2or5>
+        7F C9 03 A6
+        4E 80 04 20
+   */
+   UChar* p = (UChar*)place_to_unchain;
+   vassert(0 == (3 & (HWord)p));
+   vassert(isLoadImm_EXACTLY2or5(p, /*r*/30,
+                                 Ptr_to_ULong(place_to_jump_to_EXPECTED),
+                                 mode64));
+   vassert(fetch32(p + (mode64 ? 20 : 8) + 0) == 0x7FC903A6);
+   vassert(fetch32(p + (mode64 ? 20 : 8) + 4) == 0x4E800420);
+   /* And what we want to change it to is:
+        imm32/64-fixed r30, disp_cp_chain_me
+        mtctr r30
+        bctrl
+      viz
+        <8 or 20 bytes generated by mkLoadImm_EXACTLY2or5>
+        7F C9 03 A6
+        4E 80 04 21
+      The replacement has the same length as the original.
+   */
+   p = mkLoadImm_EXACTLY2or5(p, /*r*/30,
+                             Ptr_to_ULong(disp_cp_chain_me), mode64);
+   p = emit32(p, 0x7FC903A6);
+   p = emit32(p, 0x4E800421);
+
+   Int len = p - (UChar*)place_to_unchain;
+   vassert(len == (mode64 ? 28 : 16)); /* stay sane */
+   VexInvalRange vir = {(HWord)place_to_unchain, len};
+   return vir;
+}
+
+
+/* Patch the counter address into a profile inc point, as previously
+   created by the Pin_ProfInc case for emit_PPCInstr. */
+VexInvalRange patchProfInc_PPC ( void*  place_to_patch,
+                                 ULong* location_of_counter,
+                                 Bool   mode64 )
+{
+   UChar* p = (UChar*)place_to_patch;
+   vassert(0 == (3 & (HWord)p));
+
+   Int len = 0;
+   if (mode64) {
+      vassert(isLoadImm_EXACTLY2or5(p, /*r*/30,
+                                    0x6555655565556555ULL, True/*mode64*/));
+      vassert(fetch32(p + 20) == 0xEBBE0000);
+      vassert(fetch32(p + 24) == 0x3BBD0001);
+      vassert(fetch32(p + 28) == 0xFBBE0000);
+      p = mkLoadImm_EXACTLY2or5(p, /*r*/30,
+                                Ptr_to_ULong(location_of_counter),
+                                True/*mode64*/);
+      len = p - (UChar*)place_to_patch;
+      vassert(len == 20);
+   } else {
+      vassert(isLoadImm_EXACTLY2or5(p, /*r*/30,
+                                    0x65556555ULL, False/*!mode64*/));
+      vassert(fetch32(p +  8) == 0x83BE0004);
+      vassert(fetch32(p + 12) == 0x37BD0001);
+      vassert(fetch32(p + 16) == 0x93BE0004);
+      vassert(fetch32(p + 20) == 0x83BE0000);
+      vassert(fetch32(p + 24) == 0x7FBD0194);
+      vassert(fetch32(p + 28) == 0x93BE0000);
+      p = mkLoadImm_EXACTLY2or5(p, /*r*/30,
+                                Ptr_to_ULong(location_of_counter),
+                                False/*!mode64*/);
+      len = p - (UChar*)place_to_patch;
+      vassert(len == 8);
+   }
+   VexInvalRange vir = {(HWord)place_to_patch, len};
+   return vir;
+}
+
 
 /*---------------------------------------------------------------*/
 /*--- end                                     host_ppc_defs.c ---*/
