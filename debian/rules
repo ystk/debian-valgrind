@@ -24,6 +24,9 @@ override_dh_auto_build:
 	$(MAKE) -C docs html-docs
 	$(MAKE) -C docs man-pages
 
+override_dh_shlibdeps:
+	dh_shlibdeps -Xdebian/valgrind/usr/lib/valgrind/getoff-x86-linux # fixes #762386
+
 override_dh_strip:
 	dh_strip --dbg-package=valgrind-dbg
 

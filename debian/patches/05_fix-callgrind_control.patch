@@ -9,7 +9,7 @@ Last-Update: 2012-05-10
 +++ b/callgrind/callgrind_control.in
 @@ -29,7 +29,7 @@
    @pids = ();
-   open LIST, "vgdb -l|";
+   open LIST, "vgdb $vgdbPrefixOption -l|";
    while(<LIST>) {
 -      if (/^use --pid=(\d+) for \S*?valgrind\s+(.*?)\s*$/) {
 +      if (/^use --pid=(\d+) for \S*?valgrind\.bin\s+(.*?)\s*$/) {

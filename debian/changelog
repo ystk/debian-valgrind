@@ -1,3 +1,39 @@
+valgrind (1:3.10.0-4) unstable; urgency=medium
+
+  * Call dh_shlibdeps unconditionally
+
+ -- Alessandro Ghedini <ghedo@debian.org>  Sun, 16 Nov 2014 10:52:29 +0100
+
+valgrind (1:3.10.0-3) unstable; urgency=medium
+
+  * Bump Standards-Version to 3.9.6 (no changes needed)
+  * Fix changelog typo (Closes: #768303)
+  * Fix note about instrumenting i386 binaries on amd64 (Closes: #768412)
+
+ -- Alessandro Ghedini <ghedo@debian.org>  Fri, 14 Nov 2014 12:46:30 +0100
+
+valgrind (1:3.10.0-2) unstable; urgency=medium
+
+  * Add note in README.Debian about instrumenting i386 executables on amd64
+  * Avoid Depends: libc-i386 on valgrind:amd64 (Closes: #762386)
+
+ -- Alessandro Ghedini <ghedo@debian.org>  Wed, 05 Nov 2014 20:56:12 +0100
+
+valgrind (1:3.10.0-1) unstable; urgency=medium
+
+  * New upstream release
+  * Drop patches merged upstream:
+    - 10_fix-memcheck-manual.patch
+    - 11_track-af_inet6.patch
+    - 12_glibc-2.19.patch
+    - 13_xabort.patch
+  * Refresh the remaining patches
+  * Build on arm64 and ppc64el
+  * Fix wildcard-matches-nothing-in-dep5-copyright
+  * Fix another spelling-error-in-manpage
+
+ -- Alessandro Ghedini <ghedo@debian.org>  Sun, 21 Sep 2014 12:04:17 +0200
+
 valgrind (1:3.9.0-7) unstable; urgency=medium
 
   * Remove index() Debian-specific suppressions (not needed anymore)

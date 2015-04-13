@@ -4,7 +4,3 @@
 07_fix-spelling-in-binary.patch
 08_fix-spelling-in-manpage.patch
 09_fix-armhf-detect.patch
-10_fix-memcheck-manual.patch
-11_track-af_inet6.patch
-12_glibc-2.19.patch
-13_xabort.patch

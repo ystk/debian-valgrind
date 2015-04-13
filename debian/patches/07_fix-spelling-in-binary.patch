@@ -15,18 +15,9 @@ Last-Update: 2013-11-04
        if (!res && stat_buf.uid == VG_(geteuid)()
            && (!(stat_buf.mode & VKI_S_IWOTH))) {
           if ( stat_buf.size > 0 ) {
-@@ -80,7 +80,7 @@
-       }
-       else
-          VG_(message)(Vg_UserMsg,
--               "%s was not read as it is world writeable or not owned by the "
-+               "%s was not read as it is world writable or not owned by the "
-                "current user\n", filename);
- 
-       VG_(close)(sr_Res(fd));
 --- a/coregrind/m_gdbserver/server.c
 +++ b/coregrind/m_gdbserver/server.c
-@@ -213,13 +213,13 @@
+@@ -240,7 +240,7 @@
  "  v.do   expensive_sanity_check_general : do an expensive sanity check now\n"
  "  v.info gdbserver_status : show gdbserver status\n"
  "  v.info memory [aspacemgr] : show valgrind heap memory stats\n"
@@ -34,7 +25,9 @@ Last-Update: 2013-11-04
 +"     (with aspacemgr arg, also shows valgrind segments on log output)\n"
  "  v.info exectxt          : show stacktraces and stats of all execontexts\n"
  "  v.info scheduler        : show valgrind thread state and stacktrace\n"
- "  v.set debuglog <level>  : set valgrind debug log level to <level>\n"
+ "  v.info stats            : show various valgrind and tool stats\n"
+@@ -249,7 +249,7 @@
+ "    Valgrind internal host status/memory\n"
  "  v.translate <addr> [<traceflags>]  : debug translation of <addr> with <traceflags>\n"
  "    (default traceflags 0b00100000 : show after instrumentation)\n"
 -"   An additional flag  0b100000000 allows to show gdbserver instrumentation\n");
@@ -44,7 +37,7 @@ Last-Update: 2013-11-04
     case  1: /* v.set */
 --- a/VEX/priv/ir_defs.c
 +++ b/VEX/priv/ir_defs.c
-@@ -4294,7 +4294,7 @@
+@@ -4430,7 +4430,7 @@
     if (bb->stmts_used < 0 || bb->stmts_size < 8
         || bb->stmts_used > bb->stmts_size)
        /* this BB is so strange we can't even print it */
@@ -55,7 +48,7 @@ Last-Update: 2013-11-04
     for (i = 0; i < n_temps; i++) {
 --- a/gdbserver_tests/mchelp.stdoutB.exp
 +++ b/gdbserver_tests/mchelp.stdoutB.exp
-@@ -59,7 +59,7 @@
+@@ -61,7 +61,7 @@
    v.do   expensive_sanity_check_general : do an expensive sanity check now
    v.info gdbserver_status : show gdbserver status
    v.info memory [aspacemgr] : show valgrind heap memory stats
@@ -63,4 +56,4 @@ Last-Update: 2013-11-04
 +     (with aspacemgr arg, also shows valgrind segments on log output)
    v.info exectxt          : show stacktraces and stats of all execontexts
    v.info scheduler        : show valgrind thread state and stacktrace
-   v.set debuglog <level>  : set valgrind debug log level to <level>
+   v.info stats            : show various valgrind and tool stats

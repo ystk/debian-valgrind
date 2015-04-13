@@ -1,6 +1,13 @@
 valgrind for Debian
 -------------------
 
+  Debian's valgrind package for the amd64 architecture is built to support i386
+  binaries as well (that is, valgrind:amd64 can instrument both amd64 and i386
+  executables). However, to make this work, the libc6-dbg:i386 package must be
+  installed as well.
+
+ -- Alessandro Ghedini <ghedo@debian.org>  Sun, 05 Nov 2014 00:00:00 +0100
+
   Debian's valgrind package comes stripped of any debug symbols, which are
   provided by the valgrind-dbg package. Note that it's recommended to install
   such package because without those symbols valgrind may generate less
